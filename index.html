@@ -126,7 +126,7 @@ async function cargar(pat){
     $("fallo-msj").textContent = "No pude conectar con GitHub. Comprueba tu conexión y recarga."; pantalla("fallo"); return;
   }
   if (r.status===401 || r.status===403){ localStorage.removeItem(KEY); $("setup-err").textContent="La llave no es válida o caducó. Pega una nueva."; pantalla("setup"); return; }
-  if (r.status===404){ $("fallo-msj").textContent="No encuentro garmin/summary.json en el repositorio."; pantalla("fallo"); return; }
+  if (r.status===404){ $("fallo-msj").textContent="GitHub responde 'no encontrado' — casi siempre significa que la llave no tiene acceso al repositorio Garmin-AI. Revisa que la llave incluya ese repositorio con Contents: Read."; pantalla("fallo"); return; }
   if (!r.ok){ $("fallo-msj").textContent=`GitHub respondió ${r.status}. Reintenta en un momento.`; pantalla("fallo"); return; }
   DATOS = await r.json();
   pintar();
