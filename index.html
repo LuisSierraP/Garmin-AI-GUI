@@ -68,9 +68,13 @@ canvas{max-width:100%}
         <div class="disp sub" id="fecha"></div>
         <h1 class="disp">Informe de recuperación</h1>
       </div>
-      <button id="cambiar" class="btn disp" style="white-space:nowrap">llave ⚙</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="sync" class="btn disp" style="white-space:nowrap">⟳ sincronizar</button>
+        <button id="cambiar" class="btn disp" style="white-space:nowrap">llave ⚙</button>
+      </div>
     </header>
 
+    <p id="chip" class="sub" style="text-align:right;margin:8px 0 0"></p>
     <section class="tarjeta" style="border-radius:18px;padding:20px 16px 14px">
       <div id="dial"></div>
       <p id="veredicto" style="text-align:center;font-size:14px;margin:10px 0 0"></p>
@@ -114,7 +118,7 @@ const dur = (s) => { if(!s) return null; const h=Math.floor(s/3600), m=Math.roun
 const $ = (id) => document.getElementById(id);
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, chartTrend=null;
+let DATOS=null, chartTrend=null, chartSueno=null, chartBB=null;
 
 async function cargar(pat){
   pantalla("cargando");
@@ -131,6 +135,7 @@ async function cargar(pat){
   DATOS = await r.json();
   pintar();
   pantalla("panel");
+  autoSync();
 }
 
 function veredicto(hoy, mHrv7){
@@ -211,13 +216,15 @@ function pintar(){
 
   pintarTrend(30);
 
-  new Chart($("cSueno"), { type:"bar",
+  if (chartSueno) chartSueno.destroy();
+  chartSueno = new Chart($("cSueno"), { type:"bar",
     data:{ labels: w7.map(x=>DIA[new Date(x.day+"T12:00:00").getDay()]),
       datasets:[{ label:"Horas de sueño", data:w7.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
     options: baseOpts("h") });
 
   const bb = wAll.slice(-14);
-  new Chart($("cBB"), { type:"bar",
+  if (chartBB) chartBB.destroy();
+  chartBB = new Chart($("cBB"), { type:"bar",
     data:{ labels: bb.map(x=>fCorta(x.day)),
       datasets:[
         { label:"Máximo del día", data:bb.map(x=>x.body_battery_high), backgroundColor:css('--bateria'), borderRadius:3 },
@@ -235,9 +242,58 @@ function pintar(){
   $("pie").textContent = `Datos leídos en vivo de tu repositorio privado · ${wAll.length} días de histórico`;
 }
 
+// ── sincronización bajo demanda ──
+function chip(txt, girando){
+  const c = $("chip");
+  c.textContent = txt || "";
+  c.style.color = girando ? css('--alba') : css('--suave');
+}
+async function shaSummary(pat){
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/summary.json`,
+      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github+json" }, cache:"no-store" });
+    if(!r.ok) return null;
+    return (await r.json()).sha;
+  }catch(e){ return null; }
+}
+function vigilar(){
+  const pat = localStorage.getItem(KEY);
+  let base=null, i=0;
+  shaSummary(pat).then(s=>{ base=s; });
+  const t = setInterval(async ()=>{
+    i++;
+    const s = await shaSummary(pat);
+    if (s && base && s!==base){ clearInterval(t); chip("Datos nuevos recibidos ✓"); cargar(pat); }
+    else if (i>=16){ clearInterval(t); chip("La sincronización sigue en marcha — recarga en unos minutos"); }
+  }, 15000);
+}
+async function syncNow(auto){
+  const pat = localStorage.getItem(KEY);
+  const last = +localStorage.getItem("last_trigger") || 0;
+  if (auto && Date.now()-last < 10*60*1000) return;
+  if (!auto && Date.now()-last < 2*60*1000){ chip("Espera un par de minutos entre sincronizaciones"); return; }
+  let r;
+  try{
+    r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/garmin-sync.yml/dispatches`,
+      { method:"POST", headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github+json", "Content-Type":"application/json" },
+        body: JSON.stringify({ ref:"main" }) });
+  }catch(e){ chip("Sin conexión para lanzar la sincronización"); return; }
+  if (r.status===204){ localStorage.setItem("last_trigger", String(Date.now())); chip("Sincronizando con Garmin… (~2 min, se actualizará sola)", true); vigilar(); }
+  else if (r.status===403 || r.status===404){ chip("Para sincronizar, tu llave necesita el permiso Actions: Read and write"); }
+  else chip(`No pude lanzar la sincronización (${r.status})`);
+}
+function autoSync(){
+  const ls = DATOS && DATOS.last_sync;
+  if (!ls) return;
+  const iso = (ls.endsWith("Z") || ls.includes("+")) ? ls : ls + "Z";
+  const edad = Date.now() - new Date(iso).getTime();
+  if (edad > 60*60*1000) syncNow(true);
+}
+
 // ── eventos ──
 $("llave").addEventListener("input", (e)=>{ $("guardar").disabled = !e.target.value.trim(); });
 $("guardar").addEventListener("click", ()=>{ const p=$("llave").value.trim(); if(!p) return; localStorage.setItem(KEY,p); $("setup-err").textContent=""; cargar(p); });
+$("sync").addEventListener("click", ()=>syncNow(false));
 $("cambiar").addEventListener("click", ()=>{ localStorage.removeItem(KEY); $("llave").value=""; $("guardar").disabled=true; pantalla("setup"); });
 $("fallo-llave").addEventListener("click", ()=>{ localStorage.removeItem(KEY); pantalla("setup"); });
 document.addEventListener("click",(e)=>{ if(e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }});
