@@ -8,10 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');
-:root{
-  --fondo:#0F1622; --tarjeta:#171F2E; --borde:#263140; --tinta:#E8EDF4; --suave:#8E9AAB;
-  --alba:#F0A94A; --hrv:#4FB3A5; --fc:#E07B6A; --sueno:#7D8FD6; --bateria:#7FB86F; --contorno:#2A3849;
-}
+:root{--fondo:#0F1622;--tarjeta:#171F2E;--borde:#263140;--tinta:#E8EDF4;--suave:#8E9AAB;--alba:#F0A94A;--hrv:#4FB3A5;--fc:#E07B6A;--sueno:#7D8FD6;--bateria:#7FB86F;--contorno:#2A3849}
 *{box-sizing:border-box}
 body{margin:0;background:var(--fondo);color:var(--tinta);font-family:system-ui,-apple-system,sans-serif;padding:18px 14px 40px}
 .disp{font-family:'Barlow Condensed',system-ui,sans-serif;text-transform:uppercase;letter-spacing:.08em}
@@ -23,23 +20,28 @@ h2{font-size:13px;margin:0 0 8px}
 .cab{display:flex;justify-content:space-between;align-items:baseline}
 .sub{font-size:12px;color:var(--suave)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.met{background:var(--tarjeta);border:1px solid var(--borde);border-radius:14px;padding:12px 14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.met{background:var(--tarjeta);border:1px solid var(--borde);border-radius:14px;padding:12px 14px;cursor:pointer}
 .met .et{font-size:11px;color:var(--suave)}
 .met .v{font-size:24px;font-weight:600}
 .met .u{font-size:12px;color:var(--suave)}
 .met .n{font-size:12px;color:var(--suave);margin-top:2px}
 .btn{font-size:11px;padding:4px 10px;border-radius:999px;cursor:pointer;border:1px solid var(--borde);background:transparent;color:var(--suave)}
 .btn.act{border-color:var(--tinta);background:var(--tinta);color:var(--fondo)}
+.tabbar{display:flex;gap:6px;margin-top:14px;overflow-x:auto;padding-bottom:2px}
+.tabbtn{font-size:12px;padding:8px 14px;border-radius:999px;cursor:pointer;border:1px solid var(--borde);background:transparent;color:var(--suave);white-space:nowrap}
+.tabbtn.act{border-color:var(--alba);background:var(--alba);color:var(--fondo);font-weight:600}
 .fila{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--borde)}
 .fila:first-of-type{border-top:none}
 .centro{max-width:420px;margin:60px auto;text-align:center}
-input[type=password]{width:100%;padding:12px;border-radius:10px;border:1px solid var(--borde);background:var(--fondo);color:var(--tinta);font-family:'IBM Plex Mono',monospace;font-size:13px}
+input[type=password],input[type=number],input[type=text]{width:100%;padding:12px;border-radius:10px;border:1px solid var(--borde);background:var(--fondo);color:var(--tinta);font-family:'IBM Plex Mono',monospace;font-size:13px}
 .boton{margin-top:12px;width:100%;padding:12px;border-radius:10px;border:none;background:var(--alba);color:var(--fondo);font-weight:600;font-size:14px;cursor:pointer}
 .boton:disabled{opacity:.5}
 .err{color:var(--fc);font-size:13px}
 canvas{max-width:100%}
 .pie{font-size:12px;color:var(--suave);text-align:center;margin-top:18px}
 .oculto{display:none}
+#definicion{border-color:var(--alba)}
 </style>
 </head>
 <body>
@@ -73,35 +75,101 @@ canvas{max-width:100%}
         <button id="cambiar" class="btn disp" style="white-space:nowrap">llave ⚙</button>
       </div>
     </header>
-
     <p id="chip" class="sub" style="text-align:right;margin:8px 0 0"></p>
-    <section class="tarjeta" style="border-radius:18px;padding:20px 16px 14px">
-      <div id="dial"></div>
-      <p id="veredicto" style="text-align:center;font-size:14px;margin:10px 0 0"></p>
-    </section>
 
-    <section class="tarjeta" id="factores-card" style="display:none">
-      <h2 class="disp">Por qué tu preparación es la que es</h2>
-      <div id="factores"></div>
-    </section>
+    <nav class="tabbar">
+      <button class="tabbtn act" data-tab="general">🌅 General</button>
+      <button class="tabbtn" data-tab="ciclismo">🚴 Ciclismo</button>
+      <button class="tabbtn" data-tab="running">🏃 Running</button>
+      <button class="tabbtn" data-tab="varias">🥾 Varias</button>
+      <button class="tabbtn" data-tab="salud">⚕️ Salud</button>
+    </nav>
 
-    <div class="grid2" id="metricas"></div>
+    <!-- ══════════ TAB GENERAL ══════════ -->
+    <div id="tab-general">
+      <section class="tarjeta" style="border-radius:18px;padding:20px 16px 14px">
+        <div id="dial"></div>
+        <p id="veredicto" style="text-align:center;font-size:14px;margin:10px 0 0"></p>
+      </section>
 
-    <section class="tarjeta">
-      <div class="cab" style="align-items:center">
-        <h2 class="disp">HRV y FC en reposo</h2>
-        <div style="display:flex;gap:6px">
-          <button class="btn disp rango" data-n="7">7 d</button>
-          <button class="btn disp rango act" data-n="30">30 d</button>
-          <button class="btn disp rango" data-n="90">90 d</button>
+      <section class="tarjeta" id="factores-card" style="display:none">
+        <h2 class="disp">Por qué tu preparación es la que es</h2>
+        <div id="factores"></div>
+      </section>
+
+      <div class="grid2" id="metricas"></div>
+      <section class="tarjeta oculto" id="definicion">
+        <div class="cab"><h2 class="disp" id="def-titulo"></h2><button class="btn" onclick="document.getElementById('definicion').classList.add('oculto')">✕</button></div>
+        <p id="def-texto" style="font-size:14px;margin:0;line-height:1.5"></p>
+      </section>
+
+      <section class="tarjeta">
+        <div class="cab" style="align-items:center">
+          <h2 class="disp">HRV y FC en reposo</h2>
+          <div style="display:flex;gap:6px">
+            <button class="btn disp rango" data-n="7">7 d</button>
+            <button class="btn disp rango act" data-n="30">30 d</button>
+            <button class="btn disp rango" data-n="90">90 d</button>
+          </div>
         </div>
-      </div>
-      <canvas id="cTrend" height="210"></canvas>
-    </section>
+        <canvas id="cTrend" height="210"></canvas>
+      </section>
 
-    <section class="tarjeta"><h2 class="disp">Sueño · última semana</h2><canvas id="cSueno" height="180"></canvas></section>
-    <section class="tarjeta"><h2 class="disp">Body battery · 14 días (mín → máx)</h2><canvas id="cBB" height="170"></canvas></section>
-    <section class="tarjeta"><h2 class="disp">Últimos entrenamientos</h2><div id="acts"></div></section>
+      <section class="tarjeta">
+        <div class="cab" style="align-items:center">
+          <h2 class="disp">Sueño por fases</h2>
+          <div style="display:flex;gap:6px">
+            <button class="btn disp rangoS act" data-n="7">semana</button>
+            <button class="btn disp rangoS" data-n="30">mes</button>
+          </div>
+        </div>
+        <canvas id="cSueno" height="180"></canvas>
+      </section>
+
+      <section class="tarjeta"><h2 class="disp">Body battery · 14 días (mín → máx)</h2><canvas id="cBB" height="170"></canvas></section>
+      <section class="tarjeta"><h2 class="disp">Últimas actividades</h2><div id="acts"></div></section>
+    </div>
+
+    <!-- ══════════ TAB CICLISMO ══════════ -->
+    <div id="tab-ciclismo" class="oculto">
+      <section class="tarjeta">
+        <h2 class="disp">Km recorridos</h2>
+        <div class="grid3" id="bici-kms"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px" id="bici-filtros"></div>
+      </section>
+      <section class="tarjeta"><h2 class="disp">Salidas</h2><div id="bici-lista"></div></section>
+      <p class="pie">v1 — próximamente: VO2 máx, mapas de recorrido y filtro por gear</p>
+    </div>
+
+    <!-- ══════════ TAB RUNNING ══════════ -->
+    <div id="tab-running" class="oculto">
+      <section class="tarjeta"><h2 class="disp">Km recorridos</h2><div class="grid3" id="run-kms"></div></section>
+      <section class="tarjeta"><h2 class="disp">Carreras</h2><div id="run-lista"></div></section>
+      <p class="pie">v1 — próximamente: VO2 máx, progresión de ritmo y mapas</p>
+    </div>
+
+    <!-- ══════════ TAB VARIAS ══════════ -->
+    <div id="tab-varias" class="oculto">
+      <section class="tarjeta"><h2 class="disp">Otras actividades</h2><div id="var-lista"></div></section>
+    </div>
+
+    <!-- ══════════ TAB SALUD ══════════ -->
+    <div id="tab-salud" class="oculto">
+      <div class="grid2">
+        <div class="met" data-def="peso"><div class="disp et">Peso actual</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:var(--alba)">—</span><span class="u">kg</span></div><div class="n">pendiente de conectar con Garmin</div></div>
+        <div class="met" data-def="altura"><div class="disp et">Altura</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:var(--alba)">—</span><span class="u">cm</span></div><div class="n">pendiente de conectar con Garmin</div></div>
+      </div>
+      <section class="tarjeta">
+        <h2 class="disp">Tus objetivos</h2>
+        <p class="sub" style="margin:0 0 8px">Peso objetivo (kg)</p>
+        <input id="obj-peso" type="number" step="0.1" placeholder="p. ej. 74.5">
+        <p class="sub" style="margin:12px 0 8px">Medidas objetivo (texto libre)</p>
+        <input id="obj-medidas" type="text" placeholder="p. ej. cintura 84 cm">
+        <button id="obj-guardar" class="boton disp">Guardar objetivos</button>
+        <p id="obj-estado" class="sub" style="margin:8px 0 0"></p>
+      </section>
+      <p class="pie">v1 — los objetivos se guardan en este navegador; próximamente: peso y medidas reales desde Garmin y sistema de sugerencias</p>
+    </div>
 
     <p class="pie" id="pie"></p>
   </div>
@@ -111,19 +179,33 @@ canvas{max-width:100%}
 const REPO = "LuisSierraP/Garmin-AI";
 const KEY = "garmin_pat";
 const MES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
-const DIA = ["D","L","M","X","J","V","S"];
+const DIAL = ["dom","lun","mar","mié","jue","vie","sáb"];
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const fCorta = (iso) => { const [y,m,d]=iso.split("-"); return `${+d} ${MES[+m-1]}`; };
+const fDia = (iso) => { const dt=new Date(iso+"T12:00:00"); return `${DIAL[dt.getDay()]} ${dt.getDate()}`; };
 const horas = (s) => s==null ? null : Math.round(s/360)/10;
 const media = (a) => { const v=a.filter(x=>x!=null); return v.length ? Math.round(v.reduce((p,c)=>p+c,0)/v.length*10)/10 : null; };
 const icono = (t="") => t.includes("run")?"🏃":(t.includes("cycl")||t.includes("bik")||t.includes("gravel"))?"🚴":t.includes("hik")?"🥾":t.includes("swim")?"🏊":(t.includes("strength")||t.includes("fitness"))?"🏋️":"⚡";
 const km = (m) => m ? (m/1000).toFixed(1)+" km" : null;
 const dur = (s) => { if(!s) return null; const h=Math.floor(s/3600), m=Math.round(s%3600/60); return h ? `${h}:${String(m).padStart(2,"0")} h` : `${m} min`; };
+const esBici = (t="") => t.includes("cycl")||t.includes("bik")||t.includes("gravel");
+const esRun = (t="") => t.includes("run");
+
+const DEFS = {
+  hrv: ["HRV nocturna", "Variación entre latido y latido mientras duermes. Alta = sistema nervioso recuperado y listo; baja = fatiga, estrés o enfermedad incubándose."],
+  fcr: ["FC en reposo", "Pulsaciones por minuto en reposo absoluto. Cuanto más baja, mejor forma aeróbica; una subida repentina avisa de fatiga o enfermedad."],
+  bb: ["Body battery", "Energía corporal estimada de 0 a 100: se carga durmiendo y descansando, se gasta con esfuerzo y estrés. Guía de cuánta chispa te queda hoy."],
+  sueno: ["Sueño", "Horas dormidas y su calidad. Es el mayor constructor de recuperación: sin sueño no hay adaptación al entrenamiento."],
+  spo2: ["SpO2 nocturno", "Oxígeno en sangre mientras duermes. Normal ≥ 95%; bajadas fuertes y repetidas pueden señalar mal descanso o apnea — coméntalo con un médico si persisten."],
+  estres: ["Estrés medio", "Tensión fisiológica del día (0-100), estimada desde tu HRV. Alto sostenido = tu cuerpo no encuentra momentos de calma."],
+  peso: ["Peso", "Tu peso corporal registrado en Garmin. Próximamente se sincronizará aquí junto con su histórico."],
+  altura: ["Altura", "Tu altura del perfil de Garmin. Con peso y altura se calculan métricas como el IMC."],
+};
 
 const $ = (id) => document.getElementById(id);
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, chartTrend=null, chartSueno=null, chartBB=null;
+let DATOS=null, chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
 
 async function cargar(pat){
   pantalla("cargando");
@@ -169,11 +251,11 @@ function dialSVG(valor){
     ${[64,74,82].map(r=>`<path d="${arco(r)}" fill="none" stroke="${css('--contorno')}" stroke-width="1"/>`).join("")}
     <path d="${arco(R)}" fill="none" stroke="${css('--borde')}" stroke-width="8" stroke-linecap="round"/>${sol}
     <text x="${cx}" y="${cy-22}" text-anchor="middle" fill="${css('--tinta')}" style="font-family:'IBM Plex Mono',monospace;font-size:40px;font-weight:600">${valor ?? "—"}</text>
-    <text x="${cx}" y="${cy-4}" text-anchor="middle" fill="${css('--suave')}" class="disp" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif">preparación</text></svg>`;
+    <text x="${cx}" y="${cy-4}" text-anchor="middle" fill="${css('--suave')}" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif">preparación</text></svg>`;
 }
 
-function metrica(et, v, u, n, color){
-  return `<div class="met"><div class="disp et">${et}</div>
+function metrica(defKey, et, v, u, n, color){
+  return `<div class="met" data-def="${defKey}"><div class="disp et">${et}</div>
     <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
       <span class="mono v" style="color:${color}">${v ?? "—"}</span><span class="u">${u}</span></div>
     <div class="n">${n||""}</div></div>`;
@@ -190,17 +272,65 @@ const baseOpts = (unidad) => ({
 
 function pintarTrend(n){
   const w = [...DATOS.wellness].slice(-n);
-  const cfg = {
-    type:"line",
+  if (chartTrend) chartTrend.destroy();
+  chartTrend = new Chart($("cTrend"), { type:"line",
     data:{ labels: w.map(x=>fCorta(x.day)),
       datasets:[
         { label:"HRV (ms)", data:w.map(x=>x.hrv_ms), borderColor:css('--hrv'), borderWidth:2.5, pointRadius:0, tension:.3, spanGaps:false },
         { label:"FC reposo (ppm)", data:w.map(x=>x.resting_hr), borderColor:css('--fc'), borderWidth:2, borderDash:[5,4], pointRadius:0, tension:.3, spanGaps:false }
       ]},
-    options: baseOpts()
-  };
-  if (chartTrend) chartTrend.destroy();
-  chartTrend = new Chart($("cTrend"), cfg);
+    options: baseOpts() });
+}
+
+function pintarSueno(n){
+  const w = [...DATOS.wellness].slice(-n);
+  if (chartSueno) chartSueno.destroy();
+  const conFases = w.some(x=>x.sleep_deep_s!=null);
+  chartSueno = new Chart($("cSueno"), { type:"bar",
+    data:{ labels: w.map(x=>fDia(x.day)),
+      datasets: conFases ? [
+        { label:"Profundo", data:w.map(x=>horas(x.sleep_deep_s)), backgroundColor:"#5B6FBF", stack:"s" },
+        { label:"Ligero", data:w.map(x=>horas(x.sleep_light_s)), backgroundColor:"#7D8FD6", stack:"s" },
+        { label:"REM", data:w.map(x=>horas(x.sleep_rem_s)), backgroundColor:"#AAB7E9", stack:"s", borderRadius:4 },
+      ] : [{ label:"Horas de sueño", data:w.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
+    options: { ...baseOpts("h"), scales:{ x:{ ...baseOpts().scales.x, stacked:true, ticks:{...baseOpts().scales.x.ticks, maxTicksLimit: n>10?8:7} }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
+}
+
+function sumKm(acts, dias){
+  const desde = Date.now() - dias*24*3600*1000;
+  return Math.round(acts.filter(a=>new Date((a.start_local||"1970").replace(" ","T")).getTime()>=desde)
+    .reduce((s,a)=>s+(a.distance_m||0),0)/100)/10;
+}
+function kmsHTML(acts){
+  return [["semana",7],["mes",30],["año",365]].map(([n,d])=>
+    `<div class="met" style="cursor:default"><div class="disp et">${n}</div>
+     <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
+       <span class="mono v" style="color:${css('--alba')}">${sumKm(acts,d)}</span><span class="u">km</span></div></div>`).join("");
+}
+function filaAct(a){
+  return `<div class="fila"><div>
+    <div style="font-size:14px;font-weight:600">${icono(a.type)} ${a.name || a.type}</div>
+    <div class="sub">${(a.start_local||"").slice(0,10)} · ${[km(a.distance_m),dur(a.duration_s),a.avg_hr?`FC ${Math.round(a.avg_hr)}`:null].filter(Boolean).join(" · ")}</div>
+  </div>${a.training_effect!=null?`<div style="text-align:right"><div class="mono" style="font-size:18px;font-weight:600;color:${css('--alba')}">${a.training_effect.toFixed(1)}</div><div class="disp sub" style="font-size:10px">efecto</div></div>`:""}</div>`;
+}
+
+function pintarCiclismo(){
+  const todas = (DATOS.activities||[]).filter(a=>esBici(a.type));
+  const tipos = [...new Set(todas.map(a=>a.type))];
+  const sel = filtroBici==="todos" ? todas : todas.filter(a=>a.type===filtroBici);
+  $("bici-kms").innerHTML = kmsHTML(sel);
+  $("bici-filtros").innerHTML = ["todos",...tipos].map(t=>
+    `<button class="btn disp fbici ${t===filtroBici?"act":""}" data-t="${t}">${t==="todos"?"todos":t.replace("_"," ")}</button>`).join("");
+  $("bici-lista").innerHTML = sel.slice(0,10).map(filaAct).join("") || '<p class="sub">Sin salidas con este filtro.</p>';
+}
+
+function pintarSalud(){
+  try{
+    const o = JSON.parse(localStorage.getItem("salud_objetivos")||"{}");
+    if (o.peso) $("obj-peso").value = o.peso;
+    if (o.medidas) $("obj-medidas").value = o.medidas;
+    if (o.peso || o.medidas) $("obj-estado").textContent = `Objetivos guardados: ${[o.peso?o.peso+" kg":null, o.medidas].filter(Boolean).join(" · ")}`;
+  }catch(e){}
 }
 
 function pintar(){
@@ -210,20 +340,10 @@ function pintar(){
   const mHrv7 = media(w7.map(x=>x.hrv_ms));
   const mFcr7 = media(w7.map(x=>x.resting_hr));
 
-  $("fecha").textContent = `${fCorta(hoy.day||"")} · sincronizado ${(DATOS.last_sync||"").slice(0,16).replace("T"," ")}`;
+  $("fecha").textContent = `${fDia(hoy.day||"")} ${fCorta(hoy.day||"").split(" ")[1]} · sincronizado ${(DATOS.last_sync||"").slice(0,16).replace("T"," ")}`;
   $("dial").innerHTML = dialSVG(hoy.training_readiness);
   $("veredicto").textContent = veredicto(hoy, mHrv7);
-  $("metricas").innerHTML =
-    metrica("HRV nocturna", hoy.hrv_ms, "ms", mHrv7!=null?`media 7 d: ${mHrv7} ms`:"", css('--hrv')) +
-    metrica("FC en reposo", hoy.resting_hr, "ppm", mFcr7!=null?`media 7 d: ${mFcr7} ppm`:"", css('--fc')) +
-    metrica("Body battery", hoy.body_battery_high, "/100", hoy.body_battery_low!=null?`mínimo: ${hoy.body_battery_low}`:"", css('--bateria')) +
-    metrica("Sueño", horas(hoy.sleep_seconds), "h", hoy.sleep_score!=null?`puntuación ${hoy.sleep_score}`:"", css('--sueno')) +
-    metrica("SpO2 nocturno", hoy.spo2_avg, "%", hoy.spo2_min!=null?`mínimo: ${hoy.spo2_min}%`:"", css('--hrv')) +
-    metrica("Estrés medio", hoy.stress_avg, "/100", hoy.respiration_avg!=null?`respiración: ${hoy.respiration_avg} rpm`:"", css('--alba'));
 
-  pintarTrend(30);
-
-  // desglose del dial: los 6 factores de Garmin
   const FB = {VERY_GOOD:"excelente", GOOD:"bien", MODERATE:"regular", FAIR:"regular", POOR:"flojo", VERY_POOR:"muy flojo"};
   const factores = [
     ["Sueño de anoche", hoy.rd_sleep_factor, hoy.rd_sleep_fb],
@@ -249,16 +369,16 @@ function pintar(){
     if (extra.length) $("factores").innerHTML += `<p class="sub" style="margin:8px 0 0">${extra.join(" · ")}</p>`;
   } else { $("factores-card").style.display = "none"; }
 
-  if (chartSueno) chartSueno.destroy();
-  const conFases = w7.some(x=>x.sleep_deep_s!=null);
-  chartSueno = new Chart($("cSueno"), { type:"bar",
-    data:{ labels: w7.map(x=>DIA[new Date(x.day+"T12:00:00").getDay()]),
-      datasets: conFases ? [
-        { label:"Profundo", data:w7.map(x=>horas(x.sleep_deep_s)), backgroundColor:"#5B6FBF", stack:"s" },
-        { label:"Ligero", data:w7.map(x=>horas(x.sleep_light_s)), backgroundColor:"#7D8FD6", stack:"s" },
-        { label:"REM", data:w7.map(x=>horas(x.sleep_rem_s)), backgroundColor:"#AAB7E9", stack:"s", borderRadius:4 },
-      ] : [{ label:"Horas de sueño", data:w7.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
-    options: { ...baseOpts("h"), scales:{ x:{ ...baseOpts().scales.x, stacked:true }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
+  $("metricas").innerHTML =
+    metrica("hrv","HRV nocturna", hoy.hrv_ms, "ms", mHrv7!=null?`media 7 d: ${mHrv7} ms`:"", css('--hrv')) +
+    metrica("fcr","FC en reposo", hoy.resting_hr, "ppm", mFcr7!=null?`media 7 d: ${mFcr7} ppm`:"", css('--fc')) +
+    metrica("bb","Body battery", hoy.body_battery_high, "/100", hoy.body_battery_low!=null?`mínimo: ${hoy.body_battery_low}`:"", css('--bateria')) +
+    metrica("sueno","Sueño", horas(hoy.sleep_seconds), "h", hoy.sleep_score!=null?`puntuación ${hoy.sleep_score}`:"", css('--sueno')) +
+    metrica("spo2","SpO2 nocturno", hoy.spo2_avg, "%", hoy.spo2_min!=null?`mínimo: ${hoy.spo2_min}%`:"", css('--hrv')) +
+    metrica("estres","Estrés medio", hoy.stress_avg, "/100", hoy.respiration_avg!=null?`respiración: ${hoy.respiration_avg} rpm`:"", css('--alba'));
+
+  pintarTrend(30);
+  pintarSueno(7);
 
   const bb = wAll.slice(-14);
   if (chartBB) chartBB.destroy();
@@ -270,22 +390,21 @@ function pintar(){
       ]},
     options: { ...baseOpts(), scales:{ ...baseOpts().scales, y:{ ...baseOpts().scales.y, min:0, max:100 } } } });
 
-  $("acts").innerHTML = (DATOS.activities||[]).slice(0,5).map(a=>`
-    <div class="fila"><div>
-      <div style="font-size:14px;font-weight:600">${icono(a.type)} ${a.name || a.type}</div>
-      <div class="sub">${(a.start_local||"").slice(0,10)} · ${[km(a.distance_m),dur(a.duration_s),a.avg_hr?`FC ${Math.round(a.avg_hr)}`:null].filter(Boolean).join(" · ")}</div>
-    </div>${a.training_effect!=null?`<div style="text-align:right"><div class="mono" style="font-size:18px;font-weight:600;color:${css('--alba')}">${a.training_effect.toFixed(1)}</div><div class="disp sub" style="font-size:10px">efecto</div></div>`:""}</div>`).join("")
-    || '<p class="sub">Sin actividades recientes.</p>';
+  $("acts").innerHTML = (DATOS.activities||[]).slice(0,5).map(filaAct).join("") || '<p class="sub">Sin actividades recientes.</p>';
+
+  const runs = (DATOS.activities||[]).filter(a=>esRun(a.type));
+  $("run-kms").innerHTML = kmsHTML(runs);
+  $("run-lista").innerHTML = runs.slice(0,10).map(filaAct).join("") || '<p class="sub">Sin carreras aún.</p>';
+  const varias = (DATOS.activities||[]).filter(a=>!esBici(a.type)&&!esRun(a.type));
+  $("var-lista").innerHTML = varias.slice(0,10).map(filaAct).join("") || '<p class="sub">Sin otras actividades.</p>';
+  pintarCiclismo();
+  pintarSalud();
 
   $("pie").textContent = `Datos leídos en vivo de tu repositorio privado · ${wAll.length} días de histórico`;
 }
 
 // ── sincronización bajo demanda ──
-function chip(txt, girando){
-  const c = $("chip");
-  c.textContent = txt || "";
-  c.style.color = girando ? css('--alba') : css('--suave');
-}
+function chip(txt, girando){ const c=$("chip"); c.textContent=txt||""; c.style.color = girando ? css('--alba') : css('--suave'); }
 async function shaSummary(pat){
   try{
     const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/summary.json`,
@@ -324,8 +443,7 @@ function autoSync(){
   const ls = DATOS && DATOS.last_sync;
   if (!ls) return;
   const iso = (ls.endsWith("Z") || ls.includes("+")) ? ls : ls + "Z";
-  const edad = Date.now() - new Date(iso).getTime();
-  if (edad > 60*60*1000) syncNow(true);
+  if (Date.now() - new Date(iso).getTime() > 60*60*1000) syncNow(true);
 }
 
 // ── eventos ──
@@ -334,7 +452,27 @@ $("guardar").addEventListener("click", ()=>{ const p=$("llave").value.trim(); if
 $("sync").addEventListener("click", ()=>syncNow(false));
 $("cambiar").addEventListener("click", ()=>{ localStorage.removeItem(KEY); $("llave").value=""; $("guardar").disabled=true; pantalla("setup"); });
 $("fallo-llave").addEventListener("click", ()=>{ localStorage.removeItem(KEY); pantalla("setup"); });
-document.addEventListener("click",(e)=>{ if(e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }});
+$("obj-guardar").addEventListener("click", ()=>{
+  const o = { peso: $("obj-peso").value.trim(), medidas: $("obj-medidas").value.trim() };
+  localStorage.setItem("salud_objetivos", JSON.stringify(o));
+  $("obj-estado").textContent = "Objetivos guardados ✓";
+});
+document.addEventListener("click",(e)=>{
+  if (e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }
+  if (e.target.classList.contains("rangoS")){ document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarSueno(+e.target.dataset.n); }
+  if (e.target.classList.contains("fbici")){ filtroBici = e.target.dataset.t; pintarCiclismo(); }
+  if (e.target.classList.contains("tabbtn")){
+    document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("act")); e.target.classList.add("act");
+    ["general","ciclismo","running","varias","salud"].forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==e.target.dataset.tab));
+  }
+  const card = e.target.closest(".met[data-def]");
+  if (card && DEFS[card.dataset.def]){
+    const [t,txt] = DEFS[card.dataset.def];
+    $("def-titulo").textContent = t; $("def-texto").textContent = txt;
+    $("definicion").classList.remove("oculto");
+    $("definicion").scrollIntoView({behavior:"smooth", block:"nearest"});
+  }
+});
 
 // ── arranque ──
 const pat = localStorage.getItem(KEY);
