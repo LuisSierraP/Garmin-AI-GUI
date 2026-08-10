@@ -130,6 +130,7 @@ canvas{max-width:100%}
         <h2 class="disp">Km recorridos</h2>
         <div class="grid3" id="bici-kms"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px" id="bici-filtros"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" id="bici-gear"></div>
       </section>
       <section class="tarjeta"><h2 class="disp">Salidas</h2><div id="bici-lista"></div></section>
       <p class="pie">v1 — próximamente: VO2 máx, mapas de recorrido y filtro por gear</p>
@@ -181,6 +182,10 @@ const horas = (s) => s==null ? null : Math.round(s/360)/10;
 const media = (a) => { const v=a.filter(x=>x!=null); return v.length ? Math.round(v.reduce((p,c)=>p+c,0)/v.length*10)/10 : null; };
 const icono = (t="") => t.includes("run")?"🏃":(t.includes("cycl")||t.includes("bik")||t.includes("gravel"))?"🚴":t.includes("hik")?"🥾":t.includes("swim")?"🏊":(t.includes("strength")||t.includes("fitness"))?"🏋️":"⚡";
 const km = (m) => m ? (m/1000).toFixed(1)+" km" : null;
+const fSync = (iso) => { if(!iso) return ""; const d = new Date((iso.endsWith("Z")||iso.includes("+"))?iso:iso+"Z");
+  const ahora = new Date(); const mismo = d.toDateString()===ahora.toDateString();
+  const hh=String(d.getHours()).padStart(2,"0"), mm=String(d.getMinutes()).padStart(2,"0");
+  return `${mismo?"hoy":DIAL[d.getDay()]+" "+d.getDate()} ${hh}:${mm}`; };
 const dur = (s) => { if(!s) return null; const h=Math.floor(s/3600), m=Math.round(s%3600/60); return h ? `${h}:${String(m).padStart(2,"0")} h` : `${m} min`; };
 const esBici = (t="") => t.includes("cycl")||t.includes("bik")||t.includes("gravel");
 const esRun = (t="") => t.includes("run");
@@ -199,7 +204,7 @@ const DEFS = {
 const $ = (id) => document.getElementById(id);
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, CONFIG=null, chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
+let DATOS=null, CONFIG=null, GEARR=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
 const TODAS_TABS = ["general","ciclismo","running","varias","salud"];
 const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
 
@@ -209,6 +214,22 @@ async function cargarConfig(pat){
       { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
     CONFIG = r.ok ? await r.json() : CONFIG_DEFECTO;
   }catch(e){ CONFIG = CONFIG_DEFECTO; }
+}
+
+async function cargarGear(pat){
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/app/gear-reglas.json`,
+      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    GEARR = r.ok ? await r.json() : null;
+  }catch(e){ GEARR = null; }
+}
+function gearDe(a){
+  if (!GEARR) return null;
+  const t = a.type||"", d = (a.start_local||"").slice(0,10), corte = GEARR.fecha_corte||"2026-03-15";
+  if (t.includes("indoor")) return "trek_rodillo";
+  if (d >= corte) return "grizl";
+  if (t.includes("road")) return "trek";
+  return "commute";
 }
 
 function perfilActivo(){
@@ -244,6 +265,7 @@ async function cargar(pat){
   if (!r.ok){ $("fallo-msj").textContent=`GitHub respondió ${r.status}. Reintenta en un momento.`; pantalla("fallo"); return; }
   DATOS = await r.json();
   await cargarConfig(pat);
+  await cargarGear(pat);
   renderTabs();
   pintar();
   pantalla("panel");
@@ -342,11 +364,20 @@ function filaAct(a){
 function pintarCiclismo(){
   const todas = (DATOS.activities||[]).filter(a=>esBici(a.type));
   const tipos = [...new Set(todas.map(a=>a.type))];
-  const sel = filtroBici==="todos" ? todas : todas.filter(a=>a.type===filtroBici);
+  let sel = filtroBici==="todos" ? todas : todas.filter(a=>a.type===filtroBici);
+  if (GEARR && filtroGear!=="todos") sel = sel.filter(a=>gearDe(a)===filtroGear);
   $("bici-kms").innerHTML = kmsHTML(sel);
   $("bici-filtros").innerHTML = ["todos",...tipos].map(t=>
-    `<button class="btn disp fbici ${t===filtroBici?"act":""}" data-t="${t}">${t==="todos"?"todos":t.replace("_"," ")}</button>`).join("");
-  $("bici-lista").innerHTML = sel.slice(0,10).map(filaAct).join("") || '<p class="sub">Sin salidas con este filtro.</p>';
+    `<button class="btn disp fbici ${t===filtroBici?"act":""}" data-t="${t}">${t==="todos"?"tipo: todos":t.replace("_"," ")}</button>`).join("");
+  if (GEARR){
+    const usados = [...new Set(todas.map(gearDe))];
+    $("bici-gear").innerHTML = ["todos",...usados].map(g=>
+      `<button class="btn disp fgear ${g===filtroGear?"act":""}" data-g="${g}">${g==="todos"?"gear: todos":"🚲 "+(GEARR.gears[g]||g)}</button>`).join("");
+  }
+  $("bici-lista").innerHTML = sel.slice(0,10).map(a=>{
+    const g = GEARR ? (GEARR.gears[gearDe(a)]||"") : "";
+    return filaAct(a).replace('</div>\n  </div>', ` · 🚲 ${g}</div>\n  </div>`);
+  }).join("") || '<p class="sub">Sin salidas con este filtro.</p>';
 }
 
 function pintarSalud(){
@@ -365,7 +396,7 @@ function pintar(){
   const mHrv7 = media(w7.map(x=>x.hrv_ms));
   const mFcr7 = media(w7.map(x=>x.resting_hr));
 
-  $("fecha").textContent = `${fDia(hoy.day||"")} ${fCorta(hoy.day||"").split(" ")[1]} · sincronizado ${(DATOS.last_sync||"").slice(0,16).replace("T"," ")}`;
+  $("fecha").textContent = `${fDia(hoy.day||"")} · sincronizado ${fSync(DATOS.last_sync)}`;
   $("dial").innerHTML = dialSVG(hoy.training_readiness);
   $("veredicto").textContent = veredicto(hoy, mHrv7);
 
@@ -486,6 +517,7 @@ document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }
   if (e.target.classList.contains("rangoS")){ document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarSueno(+e.target.dataset.n); }
   if (e.target.classList.contains("fbici")){ filtroBici = e.target.dataset.t; pintarCiclismo(); }
+  if (e.target.classList.contains("fgear")){ filtroGear = e.target.dataset.g; pintarCiclismo(); }
   if (e.target.classList.contains("tabbtn")){
     document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("act")); e.target.classList.add("act");
     ["general","ciclismo","running","varias","salud"].forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==e.target.dataset.tab));
