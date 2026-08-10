@@ -91,6 +91,11 @@ canvas{max-width:100%}
         <div id="factores"></div>
       </section>
 
+      <section class="tarjeta" id="mas-dia-card" style="display:none">
+        <h2 class="disp">Más del día</h2>
+        <div id="mas-dia" class="grid3"></div>
+      </section>
+
       <div class="grid2" id="metricas"></div>
       <section class="tarjeta oculto" id="definicion">
         <div class="cab"><h2 class="disp" id="def-titulo"></h2><button class="btn" onclick="document.getElementById('definicion').classList.add('oculto')">✕</button></div>
@@ -132,6 +137,7 @@ canvas{max-width:100%}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px" id="bici-filtros"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" id="bici-gear"></div>
       </section>
+      <section class="tarjeta"><h2 class="disp">Carga semanal (km)</h2><canvas id="cBiciSemanas" height="150"></canvas></section>
       <section class="tarjeta"><h2 class="disp">Salidas</h2><div id="bici-lista"></div></section>
       <p class="pie">v1 — próximamente: VO2 máx, mapas de recorrido y filtro por gear</p>
     </div>
@@ -139,6 +145,7 @@ canvas{max-width:100%}
     <!-- ══════════ TAB RUNNING ══════════ -->
     <div id="tab-running" class="oculto">
       <section class="tarjeta"><h2 class="disp">Km recorridos</h2><div class="grid3" id="run-kms"></div></section>
+      <section class="tarjeta"><h2 class="disp">Progresión de ritmo</h2><canvas id="cRunRitmo" height="150"></canvas></section>
       <section class="tarjeta"><h2 class="disp">Carreras</h2><div id="run-lista"></div></section>
       <p class="pie">v1 — próximamente: VO2 máx, progresión de ritmo y mapas</p>
     </div>
@@ -167,6 +174,14 @@ canvas{max-width:100%}
     </div>
 
     <p class="pie" id="pie"></p>
+    </div>
+
+    <div id="detalle" class="oculto" style="position:fixed;inset:0;background:rgba(15,22,34,.92);z-index:50;overflow-y:auto;padding:18px 14px">
+      <div class="wrap">
+        <div class="cab"><h1 class="disp" style="font-size:20px" id="det-titulo">Actividad</h1>
+          <button class="btn disp" onclick="document.getElementById('detalle').classList.add('oculto')">✕ cerrar</button></div>
+        <div id="det-cuerpo"><p class="sub">Cargando detalle…</p></div>
+      </div>
   </div>
 </div>
 
@@ -223,13 +238,18 @@ async function cargarGear(pat){
     GEARR = r.ok ? await r.json() : null;
   }catch(e){ GEARR = null; }
 }
-function gearDe(a){
+function gearFisico(a){ // bici REAL usada -- esto es lo que se filtra
   if (!GEARR) return null;
   const t = a.type||"", d = (a.start_local||"").slice(0,10), corte = GEARR.fecha_corte||"2026-03-15";
-  if (t.includes("indoor")) return "trek_rodillo";
+  if (t.includes("indoor")) return "trek"; // indoor siempre es la Trek + rodillo, fisicamente
   if (d >= corte) return "grizl";
   if (t.includes("road")) return "trek";
   return "commute";
+}
+function gearEtiqueta(a){ // lo que se MUESTRA en cada fila (puede diferir del gear fisico)
+  if (!GEARR) return "";
+  if ((a.type||"").includes("indoor")) return GEARR.indoor_display || "Rodillo";
+  return GEARR.gears[gearFisico(a)] || "";
 }
 
 function perfilActivo(){
@@ -354,10 +374,11 @@ function kmsHTML(acts){
      <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
        <span class="mono v" style="color:${css('--alba')}">${sumKm(acts,d)}</span><span class="u">km</span></div></div>`).join("");
 }
-function filaAct(a){
-  return `<div class="fila"><div>
+function filaAct(a, gearLabel){
+  const sub = [km(a.distance_m),dur(a.duration_s),a.avg_hr?`FC ${Math.round(a.avg_hr)}`:null, gearLabel?`🚲 ${gearLabel}`:null].filter(Boolean).join(" · ");
+  return `<div class="fila" style="cursor:pointer" data-actid="${a.id}"><div>
     <div style="font-size:14px;font-weight:600">${icono(a.type)} ${a.name || a.type}</div>
-    <div class="sub">${(a.start_local||"").slice(0,10)} · ${[km(a.distance_m),dur(a.duration_s),a.avg_hr?`FC ${Math.round(a.avg_hr)}`:null].filter(Boolean).join(" · ")}</div>
+    <div class="sub">${(a.start_local||"").slice(0,10)} · ${sub}</div>
   </div>${a.training_effect!=null?`<div style="text-align:right"><div class="mono" style="font-size:18px;font-weight:600;color:${css('--alba')}">${a.training_effect.toFixed(1)}</div><div class="disp sub" style="font-size:10px">efecto</div></div>`:""}</div>`;
 }
 
@@ -365,19 +386,48 @@ function pintarCiclismo(){
   const todas = (DATOS.activities||[]).filter(a=>esBici(a.type));
   const tipos = [...new Set(todas.map(a=>a.type))];
   let sel = filtroBici==="todos" ? todas : todas.filter(a=>a.type===filtroBici);
-  if (GEARR && filtroGear!=="todos") sel = sel.filter(a=>gearDe(a)===filtroGear);
+  if (GEARR && filtroGear!=="todos") sel = sel.filter(a=>gearFisico(a)===filtroGear);
   $("bici-kms").innerHTML = kmsHTML(sel);
   $("bici-filtros").innerHTML = ["todos",...tipos].map(t=>
     `<button class="btn disp fbici ${t===filtroBici?"act":""}" data-t="${t}">${t==="todos"?"tipo: todos":t.replace("_"," ")}</button>`).join("");
   if (GEARR){
-    const usados = [...new Set(todas.map(gearDe))];
+    const usados = [...new Set(todas.map(gearFisico))];
     $("bici-gear").innerHTML = ["todos",...usados].map(g=>
       `<button class="btn disp fgear ${g===filtroGear?"act":""}" data-g="${g}">${g==="todos"?"gear: todos":"🚲 "+(GEARR.gears[g]||g)}</button>`).join("");
   }
-  $("bici-lista").innerHTML = sel.slice(0,10).map(a=>{
-    const g = GEARR ? (GEARR.gears[gearDe(a)]||"") : "";
-    return filaAct(a).replace('</div>\n  </div>', ` · 🚲 ${g}</div>\n  </div>`);
+  $("bici-lista").innerHTML = sel.slice(0,30).map(a=>{
+    const g = gearEtiqueta(a);
+    return filaAct(a, g);
   }).join("") || '<p class="sub">Sin salidas con este filtro.</p>';
+  pintarCargaSemanal(sel);
+}
+
+let chartCargaSem=null, chartRitmo=null;
+function semanaISO(iso){
+  const d = new Date(iso.replace(" ","T"));
+  const dia = (d.getDay()+6)%7; // lunes=0
+  const lunes = new Date(d); lunes.setDate(d.getDate()-dia);
+  return `${lunes.getDate()} ${MES[lunes.getMonth()]}`;
+}
+function pintarCargaSemanal(sel){
+  const porSemana = {};
+  sel.forEach(a=>{ const s = semanaISO(a.start_local||""); porSemana[s]=(porSemana[s]||0)+(a.distance_m||0)/1000; });
+  const claves = Object.keys(porSemana).sort((a,b)=> new Date(a+" 2026")-new Date(b+" 2026")).slice(-12);
+  if (chartCargaSem) chartCargaSem.destroy();
+  if (!$("cBiciSemanas")) return;
+  chartCargaSem = new Chart($("cBiciSemanas"), { type:"bar",
+    data:{ labels: claves, datasets:[{ label:"km/semana", data: claves.map(k=>Math.round(porSemana[k]*10)/10), backgroundColor:css('--alba'), borderRadius:4 }]},
+    options: baseOpts("km") });
+}
+function pintarRitmoRun(runs){
+  const conRitmo = [...runs].filter(a=>a.distance_m>0 && a.duration_s>0).sort((a,b)=>(a.start_local||"").localeCompare(b.start_local||"")).slice(-20);
+  const ritmo = conRitmo.map(a=> (a.duration_s/60) / (a.distance_m/1000) ); // min/km
+  if (chartRitmo) chartRitmo.destroy();
+  if (!$("cRunRitmo")) return;
+  chartRitmo = new Chart($("cRunRitmo"), { type:"line",
+    data:{ labels: conRitmo.map(a=>fCorta((a.start_local||"").slice(0,10))),
+      datasets:[{ label:"min/km", data: ritmo.map(r=>Math.round(r*100)/100), borderColor:css('--fc'), borderWidth:2.5, pointRadius:3, tension:.2 }]},
+    options: { ...baseOpts("min/km"), scales:{ ...baseOpts().scales, y:{ ...baseOpts().scales.y, reverse:true } } } }); // menor = mejor, arriba
 }
 
 function pintarSalud(){
@@ -389,12 +439,23 @@ function pintarSalud(){
   }catch(e){}
 }
 
+function rango(vals){
+  const v = vals.filter(x=>x!=null);
+  if (v.length<5) return null;
+  const m = v.reduce((a,b)=>a+b,0)/v.length;
+  const sd = Math.sqrt(v.reduce((a,b)=>a+(b-m)**2,0)/v.length);
+  return { min: Math.round((m-sd)*10)/10, max: Math.round((m+sd)*10)/10, media: Math.round(m*10)/10 };
+}
 function pintar(){
   const wAll = [...DATOS.wellness];
   const hoy = wAll[wAll.length-1] || {};
   const w7 = wAll.slice(-7);
+  const w30 = wAll.slice(-30);
   const mHrv7 = media(w7.map(x=>x.hrv_ms));
   const mFcr7 = media(w7.map(x=>x.resting_hr));
+  const rHrv = rango(w30.map(x=>x.hrv_ms));
+  const rFcr = rango(w30.map(x=>x.resting_hr));
+  const rSueno = rango(w30.map(x=>horas(x.sleep_seconds)));
 
   $("fecha").textContent = `${fDia(hoy.day||"")} · sincronizado ${fSync(DATOS.last_sync)}`;
   $("dial").innerHTML = dialSVG(hoy.training_readiness);
@@ -425,13 +486,34 @@ function pintar(){
     if (extra.length) $("factores").innerHTML += `<p class="sub" style="margin:8px 0 0">${extra.join(" · ")}</p>`;
   } else { $("factores-card").style.display = "none"; }
 
+  const notaRango = (r, v, u) => {
+    if (!r) return "";
+    if (v==null) return `rango habitual (30 d): ${r.min}-${r.max} ${u}`;
+    const dentro = v>=r.min && v<=r.max;
+    return `${dentro?"dentro de":"fuera de"} tu rango habitual (${r.min}-${r.max} ${u})`;
+  };
   $("metricas").innerHTML =
-    metrica("hrv","HRV nocturna", hoy.hrv_ms, "ms", mHrv7!=null?`media 7 d: ${mHrv7} ms`:"", css('--hrv')) +
-    metrica("fcr","FC en reposo", hoy.resting_hr, "ppm", mFcr7!=null?`media 7 d: ${mFcr7} ppm`:"", css('--fc')) +
+    metrica("hrv","HRV nocturna", hoy.hrv_ms, "ms", notaRango(rHrv, hoy.hrv_ms, "ms") || (mHrv7!=null?`media 7 d: ${mHrv7} ms`:""), css('--hrv')) +
+    metrica("fcr","FC en reposo", hoy.resting_hr, "ppm", notaRango(rFcr, hoy.resting_hr, "ppm") || (mFcr7!=null?`media 7 d: ${mFcr7} ppm`:""), css('--fc')) +
     metrica("bb","Body battery", hoy.body_battery_high, "/100", hoy.body_battery_low!=null?`mínimo: ${hoy.body_battery_low}`:"", css('--bateria')) +
-    metrica("sueno","Sueño", horas(hoy.sleep_seconds), "h", hoy.sleep_score!=null?`puntuación ${hoy.sleep_score}`:"", css('--sueno')) +
+    metrica("sueno","Sueño", horas(hoy.sleep_seconds), "h", notaRango(rSueno, horas(hoy.sleep_seconds), "h") || (hoy.sleep_score!=null?`puntuación ${hoy.sleep_score}`:""), css('--sueno')) +
     metrica("spo2","SpO2 nocturno", hoy.spo2_avg, "%", hoy.spo2_min!=null?`mínimo: ${hoy.spo2_min}%`:"", css('--hrv')) +
     metrica("estres","Estrés medio", hoy.stress_avg, "/100", hoy.respiration_avg!=null?`respiración: ${hoy.respiration_avg} rpm`:"", css('--alba'));
+
+  // "más del día": pasos, minutos de intensidad, bb cargado/gastado, desglose de estres
+  const masDia = [];
+  if (hoy.steps!=null) masDia.push(["Pasos", hoy.steps.toLocaleString("es"), ""]);
+  if (hoy.intensity_moderate_min!=null || hoy.intensity_vigorous_min!=null)
+    masDia.push(["Min. intensidad", `${hoy.intensity_moderate_min||0}+${hoy.intensity_vigorous_min||0}`, "mod+vig"]);
+  if (hoy.bb_charged!=null) masDia.push(["BB cargado", Math.round(hoy.bb_charged), "pts"]);
+  if (hoy.bb_drained!=null) masDia.push(["BB gastado", Math.round(hoy.bb_drained), "pts"]);
+  if (hoy.stress_high_pct!=null) masDia.push(["Estrés alto", Math.round(hoy.stress_high_pct)+"%", "del día"]);
+  if (hoy.stress_rest_pct!=null) masDia.push(["En calma", Math.round(hoy.stress_rest_pct)+"%", "del día"]);
+  if (masDia.length){
+    $("mas-dia-card").style.display = "";
+    $("mas-dia").innerHTML = masDia.map(([et,v,u])=>`<div class="met" style="cursor:default"><div class="disp et">${et}</div>
+      <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v">${v}</span><span class="u">${u}</span></div></div>`).join("");
+  } else { $("mas-dia-card").style.display = "none"; }
 
   pintarTrend(30);
   pintarSueno(7);
@@ -450,9 +532,10 @@ function pintar(){
 
   const runs = (DATOS.activities||[]).filter(a=>esRun(a.type));
   $("run-kms").innerHTML = kmsHTML(runs);
-  $("run-lista").innerHTML = runs.slice(0,10).map(filaAct).join("") || '<p class="sub">Sin carreras aún.</p>';
+  $("run-lista").innerHTML = runs.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin carreras aún.</p>';
+  pintarRitmoRun(runs);
   const varias = (DATOS.activities||[]).filter(a=>!esBici(a.type)&&!esRun(a.type));
-  $("var-lista").innerHTML = varias.slice(0,10).map(filaAct).join("") || '<p class="sub">Sin otras actividades.</p>';
+  $("var-lista").innerHTML = varias.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin otras actividades.</p>';
   pintarCiclismo();
   pintarSalud();
 
@@ -502,6 +585,58 @@ function autoSync(){
   if (Date.now() - new Date(iso).getTime() > 60*60*1000) syncNow(true);
 }
 
+// ── vista de detalle por actividad ──
+async function abrirDetalle(id, meta){
+  $("det-titulo").textContent = (meta && meta.name) || "Actividad";
+  $("det-cuerpo").innerHTML = '<p class="sub">Cargando detalle…</p>';
+  $("detalle").classList.remove("oculto");
+  const pat = localStorage.getItem(KEY);
+  let d;
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/details/${id}.json`,
+      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" } });
+    if (!r.ok){ $("det-cuerpo").innerHTML = '<p class="sub">Aún no hay detalle guardado para esta actividad (llegará en próximas sincronizaciones).</p>'; return; }
+    d = await r.json();
+  }catch(e){ $("det-cuerpo").innerHTML = '<p class="err">No pude cargar el detalle.</p>'; return; }
+
+  let html = "";
+  if (meta) html += `<p class="sub">${(meta.start_local||"").slice(0,10)} · ${[km(meta.distance_m),dur(meta.duration_s),meta.avg_hr?`FC media ${Math.round(meta.avg_hr)}`:null,meta.max_hr?`FC máx ${Math.round(meta.max_hr)}`:null,meta.elev_gain_m?`+${Math.round(meta.elev_gain_m)} m`:null].filter(Boolean).join(" · ")}</p>`;
+
+  const splits = d.split_summaries || d.splits;
+  if (splits && (Array.isArray(splits) ? splits.length : Object.keys(splits).length)){
+    const arr = Array.isArray(splits) ? splits : (splits.lapDTOs || splits.splitSummaries || []);
+    if (arr.length){
+      html += `<section class="tarjeta"><h2 class="disp">Splits</h2><div style="font-size:13px">`;
+      arr.slice(0,25).forEach((s,i)=>{
+        const dist = s.distance ? (s.distance/1000).toFixed(2)+" km" : "";
+        const t = s.duration ? dur(s.duration) : "";
+        const hr = s.averageHR ? `FC ${Math.round(s.averageHR)}` : "";
+        html += `<div class="fila">${i+1}. ${[dist,t,hr].filter(Boolean).join(" · ")}</div>`;
+      });
+      html += `</div></section>`;
+    }
+  }
+
+  const zonas = d.hr_zones;
+  if (zonas && Array.isArray(zonas) && zonas.length){
+    html += `<section class="tarjeta"><h2 class="disp">Zonas de FC</h2><div style="font-size:13px">`;
+    zonas.forEach(z=>{
+      const min = z.secsInZone ? dur(z.secsInZone) : "";
+      html += `<div class="fila">Zona ${z.zoneNumber||""}: ${min}</div>`;
+    });
+    html += `</div></section>`;
+  }
+
+  const w = d.weather;
+  if (w && !w._error){
+    const partes = [w.temp!=null?`${Math.round(w.temp)}°C`:null, w.windSpeed!=null?`viento ${Math.round(w.windSpeed)} km/h`:null, w.weatherTypeDTO?.desc].filter(Boolean);
+    if (partes.length) html += `<section class="tarjeta"><h2 class="disp">Clima</h2><p style="font-size:14px;margin:0">${partes.join(" · ")}</p></section>`;
+  }
+
+  if (!html) html = '<p class="sub">Sin detalle adicional disponible para esta actividad.</p>';
+  $("det-cuerpo").innerHTML = html;
+}
+
 // ── eventos ──
 $("llave").addEventListener("input", (e)=>{ $("guardar").disabled = !e.target.value.trim(); });
 $("guardar").addEventListener("click", ()=>{ const p=$("llave").value.trim(); if(!p) return; localStorage.setItem(KEY,p); $("setup-err").textContent=""; cargar(p); });
@@ -521,6 +656,12 @@ document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("tabbtn")){
     document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("act")); e.target.classList.add("act");
     ["general","ciclismo","running","varias","salud"].forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==e.target.dataset.tab));
+  }
+  const fila = e.target.closest(".fila[data-actid]");
+  if (fila){
+    const id = fila.dataset.actid;
+    const meta = (DATOS.activities||[]).find(a=>String(a.id)===String(id));
+    abrirDetalle(id, meta);
   }
   const card = e.target.closest(".met[data-def]");
   if (card && DEFS[card.dataset.def]){
