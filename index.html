@@ -80,6 +80,11 @@ canvas{max-width:100%}
       <p id="veredicto" style="text-align:center;font-size:14px;margin:10px 0 0"></p>
     </section>
 
+    <section class="tarjeta" id="factores-card" style="display:none">
+      <h2 class="disp">Por qué tu preparación es la que es</h2>
+      <div id="factores"></div>
+    </section>
+
     <div class="grid2" id="metricas"></div>
 
     <section class="tarjeta">
@@ -212,15 +217,48 @@ function pintar(){
     metrica("HRV nocturna", hoy.hrv_ms, "ms", mHrv7!=null?`media 7 d: ${mHrv7} ms`:"", css('--hrv')) +
     metrica("FC en reposo", hoy.resting_hr, "ppm", mFcr7!=null?`media 7 d: ${mFcr7} ppm`:"", css('--fc')) +
     metrica("Body battery", hoy.body_battery_high, "/100", hoy.body_battery_low!=null?`mínimo: ${hoy.body_battery_low}`:"", css('--bateria')) +
-    metrica("Sueño", horas(hoy.sleep_seconds), "h", hoy.sleep_score!=null?`puntuación ${hoy.sleep_score}`:"", css('--sueno'));
+    metrica("Sueño", horas(hoy.sleep_seconds), "h", hoy.sleep_score!=null?`puntuación ${hoy.sleep_score}`:"", css('--sueno')) +
+    metrica("SpO2 nocturno", hoy.spo2_avg, "%", hoy.spo2_min!=null?`mínimo: ${hoy.spo2_min}%`:"", css('--hrv')) +
+    metrica("Estrés medio", hoy.stress_avg, "/100", hoy.respiration_avg!=null?`respiración: ${hoy.respiration_avg} rpm`:"", css('--alba'));
 
   pintarTrend(30);
 
+  // desglose del dial: los 6 factores de Garmin
+  const FB = {VERY_GOOD:"excelente", GOOD:"bien", MODERATE:"regular", FAIR:"regular", POOR:"flojo", VERY_POOR:"muy flojo"};
+  const factores = [
+    ["Sueño de anoche", hoy.rd_sleep_factor, hoy.rd_sleep_fb],
+    ["Tiempo de recuperación", hoy.rd_recovery_factor, hoy.rd_recovery_fb],
+    ["Carga aguda", hoy.rd_acwr_factor, hoy.rd_acwr_fb],
+    ["Historial de estrés", hoy.rd_stress_factor, hoy.rd_stress_fb],
+    ["HRV", hoy.rd_hrv_factor, hoy.rd_hrv_fb],
+    ["Historial de sueño", hoy.rd_sleep_hist_factor, hoy.rd_sleep_hist_fb],
+  ].filter(f=>f[1]!=null);
+  if (factores.length){
+    $("factores-card").style.display = "";
+    $("factores").innerHTML = factores.map(([n,p,fb])=>{
+      const color = p>=80 ? css('--bateria') : p>=50 ? css('--alba') : css('--fc');
+      return `<div style="margin:8px 0">
+        <div style="display:flex;justify-content:space-between;font-size:13px">
+          <span>${n}</span><span class="sub">${FB[fb]||fb||""} · ${p}%</span></div>
+        <div style="height:6px;border-radius:3px;background:var(--borde);margin-top:4px">
+          <div style="height:6px;border-radius:3px;width:${p}%;background:${color}"></div></div></div>`;
+    }).join("");
+    const extra=[];
+    if (hoy.rd_recovery_time_min) extra.push(`recuperación completa en ${Math.round(hoy.rd_recovery_time_min/60*10)/10} h`);
+    if (hoy.rd_acute_load!=null) extra.push(`carga aguda: ${hoy.rd_acute_load}`);
+    if (extra.length) $("factores").innerHTML += `<p class="sub" style="margin:8px 0 0">${extra.join(" · ")}</p>`;
+  } else { $("factores-card").style.display = "none"; }
+
   if (chartSueno) chartSueno.destroy();
+  const conFases = w7.some(x=>x.sleep_deep_s!=null);
   chartSueno = new Chart($("cSueno"), { type:"bar",
     data:{ labels: w7.map(x=>DIA[new Date(x.day+"T12:00:00").getDay()]),
-      datasets:[{ label:"Horas de sueño", data:w7.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
-    options: baseOpts("h") });
+      datasets: conFases ? [
+        { label:"Profundo", data:w7.map(x=>horas(x.sleep_deep_s)), backgroundColor:"#5B6FBF", stack:"s" },
+        { label:"Ligero", data:w7.map(x=>horas(x.sleep_light_s)), backgroundColor:"#7D8FD6", stack:"s" },
+        { label:"REM", data:w7.map(x=>horas(x.sleep_rem_s)), backgroundColor:"#AAB7E9", stack:"s", borderRadius:4 },
+      ] : [{ label:"Horas de sueño", data:w7.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
+    options: { ...baseOpts("h"), scales:{ x:{ ...baseOpts().scales.x, stacked:true }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
 
   const bb = wAll.slice(-14);
   if (chartBB) chartBB.destroy();
