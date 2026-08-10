@@ -77,13 +77,7 @@ canvas{max-width:100%}
     </header>
     <p id="chip" class="sub" style="text-align:right;margin:8px 0 0"></p>
 
-    <nav class="tabbar">
-      <button class="tabbtn act" data-tab="general">🌅 General</button>
-      <button class="tabbtn" data-tab="ciclismo">🚴 Ciclismo</button>
-      <button class="tabbtn" data-tab="running">🏃 Running</button>
-      <button class="tabbtn" data-tab="varias">🥾 Varias</button>
-      <button class="tabbtn" data-tab="salud">⚕️ Salud</button>
-    </nav>
+    <nav class="tabbar" id="tabbar"></nav>
 
     <!-- ══════════ TAB GENERAL ══════════ -->
     <div id="tab-general">
@@ -205,7 +199,36 @@ const DEFS = {
 const $ = (id) => document.getElementById(id);
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
+let DATOS=null, CONFIG=null, chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
+const TODAS_TABS = ["general","ciclismo","running","varias","salud"];
+const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
+
+async function cargarConfig(pat){
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/app/config.json`,
+      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    CONFIG = r.ok ? await r.json() : CONFIG_DEFECTO;
+  }catch(e){ CONFIG = CONFIG_DEFECTO; }
+}
+
+function perfilActivo(){
+  const guardado = localStorage.getItem("perfil");
+  const perfiles = CONFIG.perfiles || {};
+  return perfiles[guardado] ? guardado : (CONFIG.perfil_por_defecto || Object.keys(perfiles)[0]);
+}
+
+function renderTabs(){
+  const pid = perfilActivo();
+  const perfil = (CONFIG.perfiles||{})[pid] || {tabs:TODAS_TABS};
+  const visibles = (perfil.tabs||[]).filter(t=>TODAS_TABS.includes(t));
+  $("tabbar").innerHTML = visibles.map((t,i)=>{
+    const meta = (CONFIG.tabs||{})[t] || {icono:"",nombre:t};
+    return `<button class="tabbtn ${i===0?"act":""}" data-tab="${t}">${meta.icono} ${meta.nombre}</button>`;
+  }).join("");
+  TODAS_TABS.forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==visibles[0]));
+  const rol = perfil.rol ? ` · ${perfil.rol}` : "";
+  $("pie").dataset.perfil = `perfil: ${perfil.nombre||pid}${rol}`;
+}
 
 async function cargar(pat){
   pantalla("cargando");
@@ -220,6 +243,8 @@ async function cargar(pat){
   if (r.status===404){ $("fallo-msj").textContent="GitHub responde 'no encontrado' — casi siempre significa que la llave no tiene acceso al repositorio Garmin-AI. Revisa que la llave incluya ese repositorio con Contents: Read."; pantalla("fallo"); return; }
   if (!r.ok){ $("fallo-msj").textContent=`GitHub respondió ${r.status}. Reintenta en un momento.`; pantalla("fallo"); return; }
   DATOS = await r.json();
+  await cargarConfig(pat);
+  renderTabs();
   pintar();
   pantalla("panel");
   autoSync();
@@ -400,7 +425,7 @@ function pintar(){
   pintarCiclismo();
   pintarSalud();
 
-  $("pie").textContent = `Datos leídos en vivo de tu repositorio privado · ${wAll.length} días de histórico`;
+  $("pie").textContent = `Datos leídos en vivo de tu repositorio privado · ${wAll.length} días de histórico · ${$("pie").dataset.perfil||""}`;
 }
 
 // ── sincronización bajo demanda ──
