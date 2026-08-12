@@ -205,7 +205,7 @@ canvas{max-width:100%}
             <div class="met" style="cursor:default"><div class="disp et">Peso</div><div class="mono v" id="bt-peso-v">—</div><div class="n">kg</div></div>
           </div>
 
-          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Pliegues cutáneos (mm) — calibrador</p>
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px;cursor:pointer;text-decoration:underline dotted" data-def="pliegues">Pliegues cutáneos (mm) — calibrador ℹ️</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <input id="bt-triceps" type="number" step="0.1" placeholder="tríceps">
             <input id="bt-subescapular" type="number" step="0.1" placeholder="subescapular">
@@ -213,13 +213,13 @@ canvas{max-width:100%}
             <input id="bt-pliegue-pantorrilla" type="number" step="0.1" placeholder="pliegue pantorrilla">
           </div>
 
-          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Diámetros óseos (cm)</p>
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px;cursor:pointer;text-decoration:underline dotted" data-def="diametros">Diámetros óseos (cm) ℹ️</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <input id="bt-humero" type="number" step="0.1" placeholder="húmero (biepicondíleo)">
             <input id="bt-femur" type="number" step="0.1" placeholder="fémur (biepicondíleo)">
           </div>
 
-          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Perímetros (cm)</p>
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px;cursor:pointer;text-decoration:underline dotted" data-def="perimetros">Perímetros (cm) ℹ️</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <input id="bt-brazo" type="number" step="0.1" placeholder="brazo contraído">
             <input id="bt-pantorrilla" type="number" step="0.1" placeholder="pantorrilla">
@@ -271,6 +271,9 @@ const DEFS = {
   umbral: ["Umbral de lactato", "La FC a partir de la cual tu cuerpo acumula lactato más rápido de lo que puede eliminarlo. Marca el límite entre esfuerzo sostenible y no sostenible; útil para definir zonas de entrenamiento."],
   endo: ["Endomorfia", "Mide la adiposidad relativa (grasa corporal) en la escala Heath-Carter. Valores bajos (cerca de 0.1, el mínimo posible) indican poca grasa relativa; valores altos indican más. Necesita el calibrador de pliegues cutáneos para calcularse."],
   meso: ["Mesomorfia", "Mide el desarrollo músculo-esquelético relativo a tu altura: cuánto hueso y músculo tienes comparado con alguien de tu misma estatura. Valores altos = complexión más robusta/musculosa. Necesita diámetros óseos y perímetros para calcularse."],
+  pliegues: ["Cómo medir los pliegues cutáneos", "Con un calibrador (plicómetro), pellizca la piel y grasa (sin músculo) y mide en mm:\n• Tríceps: parte posterior del brazo, punto medio entre hombro y codo, pliegue vertical, brazo relajado.\n• Subescapular: justo debajo de la punta del omóplato, pliegue en diagonal (~45°).\n• Supraespinal: encima de la cadera, donde se cruza una línea imaginaria del hueso de la cadera hacia la axila, pliegue en diagonal.\n• Pantorrilla: cara interna, en el punto más grueso, pierna apoyada con la rodilla a 90°, pliegue vertical."],
+  diametros: ["Cómo medir los diámetros óseos", "Con un calibrador de diámetros óseos (no el de pliegues), mide el ancho del hueso, no la carne:\n• Húmero: distancia entre los dos bultos óseos del codo (epicóndilos), con el brazo doblado a 90°.\n• Fémur: distancia entre los dos bultos óseos de la rodilla (epicóndilos), sentado con la rodilla doblada a 90°."],
+  perimetros: ["Cómo medir los perímetros", "Con una cinta métrica flexible (no elástica), rodea la extremidad sin apretar:\n• Brazo contraído: en el punto más ancho del brazo, con el bíceps contraído al máximo (puño cerrado, flexionando fuerte).\n• Pantorrilla: en el punto de mayor circunferencia, de pie, peso repartido en ambos pies."],
   ecto: ["Ectomorfia", "Mide la linealidad: cuán delgado y estirado es tu cuerpo en relación a tu peso. Se calcula solo con altura y peso (relación altura/raíz cúbica del peso). El mínimo posible es 0.1 -- lo obtienes cuando tu peso es alto en relación a tu altura, es decir, cuanto más lejos estás de un cuerpo 'lineal y delgado', más se acerca tu ectomorfia a ese suelo de 0.1. No es un error ni un 'mal resultado': es la escala haciendo su trabajo."],
   vo2bici: ["VO2 máx ciclismo", "Volumen máximo de oxígeno en bici. Complementa tu VO2 de running -- suelen diferir porque implican grupos musculares distintos."],
   ftp: ["FTP", "Potencia máxima que puedes sostener durante ~1 hora. Referencia estándar para definir zonas de entrenamiento en bici con potenciómetro."],
@@ -1069,10 +1072,10 @@ document.addEventListener("click",(e)=>{
       requestAnimationFrame(()=>dibujarGraficasDetalle(detalleCache[id]));
     }
   }
-  const card = e.target.closest(".met[data-def]");
+  const card = e.target.closest(".met[data-def], [data-def].disp");
   if (card && DEFS[card.dataset.def]){
     const [t,txt] = DEFS[card.dataset.def];
-    $("def-titulo").textContent = t; $("def-texto").textContent = txt;
+    $("def-titulo").textContent = t; $("def-texto").innerHTML = txt.replaceAll("\n","<br>");
     $("definicion").classList.remove("oculto");
     $("definicion").scrollIntoView({behavior:"smooth", block:"nearest"});
   }
