@@ -118,6 +118,7 @@ canvas{max-width:100%}
         <div class="cab" style="align-items:center">
           <h2 class="disp">Sueño por fases</h2>
           <div style="display:flex;gap:6px">
+            <button class="btn disp rangoS" data-n="1">día</button>
             <button class="btn disp rangoS act" data-n="7">semana</button>
             <button class="btn disp rangoS" data-n="30">mes</button>
           </div>
@@ -157,10 +158,11 @@ canvas{max-width:100%}
 
     <!-- ══════════ TAB SALUD ══════════ -->
     <div id="tab-salud" class="oculto">
-      <div class="grid2">
-        <div class="met" data-def="peso"><div class="disp et">Peso actual</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:var(--alba)">—</span><span class="u">kg</span></div><div class="n">pendiente de conectar con Garmin</div></div>
-        <div class="met" data-def="altura"><div class="disp et">Altura</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:var(--alba)">—</span><span class="u">cm</span></div><div class="n">pendiente de conectar con Garmin</div></div>
-      </div>
+      <div class="grid2" id="salud-metricas"></div>
+      <section class="tarjeta" id="salud-peso-card" style="display:none">
+        <h2 class="disp">Evolución del peso</h2>
+        <canvas id="cPeso" height="170"></canvas>
+      </section>
       <section class="tarjeta">
         <h2 class="disp">Tus objetivos</h2>
         <p class="sub" style="margin:0 0 8px">Peso objetivo (kg)</p>
@@ -212,14 +214,18 @@ const DEFS = {
   sueno: ["Sueño", "Horas dormidas y su calidad. Es el mayor constructor de recuperación: sin sueño no hay adaptación al entrenamiento."],
   spo2: ["SpO2 nocturno", "Oxígeno en sangre mientras duermes. Normal ≥ 95%; bajadas fuertes y repetidas pueden señalar mal descanso o apnea — coméntalo con un médico si persisten."],
   estres: ["Estrés medio", "Tensión fisiológica del día (0-100), estimada desde tu HRV. Alto sostenido = tu cuerpo no encuentra momentos de calma."],
-  peso: ["Peso", "Tu peso corporal registrado en Garmin. Próximamente se sincronizará aquí junto con su histórico."],
-  altura: ["Altura", "Tu altura del perfil de Garmin. Con peso y altura se calculan métricas como el IMC."],
+  peso: ["Peso", "Tu último peso registrado en Garmin, de tu báscula o introducido a mano."],
+  altura: ["Altura", "Tu altura del perfil de Garmin. Con peso y altura se calcula el IMC."],
+  imc: ["IMC", "Índice de masa corporal: peso dividido por tu altura al cuadrado. Orientativo — no distingue masa muscular de grasa."],
+  edad: ["Edad", "Calculada desde tu fecha de nacimiento en el perfil de Garmin."],
+  vo2: ["VO2 máx (running)", "Volumen máximo de oxígeno que tu cuerpo puede usar corriendo. Cuanto más alto, mejor tu capacidad aeróbica. Estimado por Garmin a partir de tus carreras."],
+  umbral: ["Umbral de lactato", "La FC a partir de la cual tu cuerpo acumula lactato más rápido de lo que puede eliminarlo. Marca el límite entre esfuerzo sostenible y no sostenible; útil para definir zonas de entrenamiento."],
 };
 
 const $ = (id) => document.getElementById(id);
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, CONFIG=null, GEARR=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
+let DATOS=null, CONFIG=null, GEARR=null, BODY=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
 const TODAS_TABS = ["general","ciclismo","running","varias","salud"];
 const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
 
@@ -237,6 +243,13 @@ async function cargarGear(pat){
       { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
     GEARR = r.ok ? await r.json() : null;
   }catch(e){ GEARR = null; }
+}
+async function cargarBody(pat){
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/body.json`,
+      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    BODY = r.ok ? await r.json() : null;
+  }catch(e){ BODY = null; }
 }
 function gearFisico(a){ // bici REAL usada -- esto es lo que se filtra
   if (!GEARR) return null;
@@ -286,6 +299,7 @@ async function cargar(pat){
   DATOS = await r.json();
   await cargarConfig(pat);
   await cargarGear(pat);
+  await cargarBody(pat);
   renderTabs();
   pintar();
   pantalla("panel");
@@ -354,7 +368,7 @@ function pintarSueno(n){
   if (chartSueno) chartSueno.destroy();
   const conFases = w.some(x=>x.sleep_deep_s!=null);
   chartSueno = new Chart($("cSueno"), { type:"bar",
-    data:{ labels: w.map(x=>fDia(x.day)),
+    data:{ labels: w.map(x=> n===1 ? "Anoche" : fDia(x.day)),
       datasets: conFases ? [
         { label:"Profundo", data:w.map(x=>horas(x.sleep_deep_s)), backgroundColor:"#5B6FBF", stack:"s" },
         { label:"Ligero", data:w.map(x=>horas(x.sleep_light_s)), backgroundColor:"#7D8FD6", stack:"s" },
@@ -430,7 +444,39 @@ function pintarRitmoRun(runs){
     options: { ...baseOpts("min/km"), scales:{ ...baseOpts().scales, y:{ ...baseOpts().scales.y, reverse:true } } } }); // menor = mejor, arriba
 }
 
+let chartPeso=null;
 function pintarSalud(){
+  const ud = BODY && BODY.profile && BODY.profile.userData;
+  const alt = ud && ud.height;
+  const wraw = BODY && BODY.weight_raw;
+  const lista = wraw && wraw.dateWeightList ? [...wraw.dateWeightList].sort((a,b)=>a.calendarDate.localeCompare(b.calendarDate)) : [];
+  const ultimo = lista.length ? lista[lista.length-1] : null;
+  const pesoKg = ultimo ? Math.round(ultimo.weight/100)/10 : null;
+  const edad = ud && ud.birthDate ? Math.floor((Date.now()-new Date(ud.birthDate))/(365.25*24*3600*1000)) : null;
+  const imc = (pesoKg && alt) ? Math.round((pesoKg/((alt/100)**2))*10)/10 : null;
+
+  const tarjetas = [];
+  tarjetas.push(["peso","Peso actual", pesoKg ?? "—", "kg", ultimo?`al ${ultimo.calendarDate}`:"pendiente de conectar con Garmin", css('--alba')]);
+  tarjetas.push(["altura","Altura", alt ?? "—", "cm", alt?"perfil de Garmin":"pendiente de conectar con Garmin", css('--alba')]);
+  if (imc!=null) tarjetas.push(["imc","IMC", imc, "", "calculado (peso/altura²)", css('--sueno')]);
+  if (edad!=null) tarjetas.push(["edad","Edad", edad, "años", "según perfil Garmin", css('--suave')]);
+  if (ud && ud.vo2MaxRunning!=null) tarjetas.push(["vo2","VO2 máx running", ud.vo2MaxRunning, "ml/kg/min", "estimado por Garmin", css('--hrv')]);
+  if (ud && ud.lactateThresholdHeartRate!=null) tarjetas.push(["umbral","Umbral de lactato", ud.lactateThresholdHeartRate, "ppm", "detectado automáticamente", css('--fc')]);
+
+  $("salud-metricas").innerHTML = tarjetas.map(([def,et,v,u,n,c])=>
+    `<div class="met" data-def="${def}"><div class="disp et">${et}</div>
+      <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:${c}">${v}</span><span class="u">${u}</span></div>
+      <div class="n">${n}</div></div>`).join("");
+
+  if (lista.length>1){
+    $("salud-peso-card").style.display = "";
+    if (chartPeso) chartPeso.destroy();
+    chartPeso = new Chart($("cPeso"), { type:"line",
+      data:{ labels: lista.map(w=>w.calendarDate),
+        datasets:[{ label:"Peso (kg)", data: lista.map(w=>Math.round(w.weight/100)/10), borderColor:css('--alba'), borderWidth:2.5, pointRadius:2, tension:.15 }]},
+      options: baseOpts("kg") });
+  } else { $("salud-peso-card").style.display = "none"; }
+
   try{
     const o = JSON.parse(localStorage.getItem("salud_objetivos")||"{}");
     if (o.peso) $("obj-peso").value = o.peso;
