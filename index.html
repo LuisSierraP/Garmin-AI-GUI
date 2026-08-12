@@ -837,37 +837,46 @@ function pintar(){
   $("pie").textContent = `Datos leídos en vivo de tu repositorio privado · ${wAll.length} días de histórico · ${$("pie").dataset.perfil||""}`;
 }
 
-// ── sincronización bajo demanda ──
+// ── disparar workflows y vigilar cambios -- patron generico, cualquier boton lo reutiliza ──
 function chip(txt, girando){ const c=$("chip"); c.textContent=txt||""; c.style.color = girando ? css('--alba') : css('--suave'); }
-async function shaSummary(pat){
+async function shaDe(path, pat){
   try{
-    const r = await fetchRepo('contents/garmin/summary.json', { pat, raw:false });
+    const r = await fetchRepo(`contents/${path}`, { pat, raw:false });
     if(!r.ok) return null;
     return (await r.json()).sha;
   }catch(e){ return null; }
 }
-function vigilar(){
+// Espera a que un archivo cambie de sha tras lanzar un workflow, y ejecuta onCambio() cuando ocurre.
+function vigilarArchivo(path, onCambio, mensajeGirando, mensajeLento){
   const pat = localStorage.getItem(KEY);
   let base=null, i=0;
-  shaSummary(pat).then(s=>{ base=s; });
+  shaDe(path, pat).then(s=>{ base=s; });
   const t = setInterval(async ()=>{
     i++;
-    const s = await shaSummary(pat);
-    if (s && base && s!==base){ clearInterval(t); chip("Datos nuevos recibidos ✓"); cargar(pat); }
-    else if (i>=16){ clearInterval(t); chip("La sincronización sigue en marcha — recarga en unos minutos"); }
+    const s = await shaDe(path, pat);
+    if (s && base && s!==base){ clearInterval(t); chip("Datos nuevos recibidos ✓"); onCambio(); }
+    else if (i>=16){ clearInterval(t); chip(mensajeLento || "Sigue en marcha — recarga en unos minutos"); }
   }, 15000);
+  chip(mensajeGirando, true);
 }
+// Lanza cualquier workflow por su nombre de archivo .yml, con los inputs que necesite.
+async function dispararWorkflow(archivoYml, inputs, pat){
+  try{
+    return await fetchRepo(`actions/workflows/${archivoYml}/dispatches`, { pat, raw:false, method:"POST", jsonBody:{ ref:"main", inputs: inputs||{} } });
+  }catch(e){ return null; }
+}
+
 async function syncNow(auto){
   const pat = localStorage.getItem(KEY);
   const last = +localStorage.getItem("last_trigger") || 0;
   if (auto && Date.now()-last < 10*60*1000) return;
   if (!auto && Date.now()-last < 2*60*1000){ chip("Espera un par de minutos entre sincronizaciones"); return; }
-  let r;
-  try{
-    r = await fetchRepo('actions/workflows/garmin-sync.yml/dispatches', { pat, raw:false, method:"POST", jsonBody:{ ref:"main" } });
-  }catch(e){ chip("Sin conexión para lanzar la sincronización"); return; }
-  if (r.status===204){ localStorage.setItem("last_trigger", String(Date.now())); chip("Sincronizando con Garmin… (~2 min, se actualizará sola)", true); vigilar(); }
-  else if (r.status===403 || r.status===404){ chip("Para sincronizar, tu llave necesita el permiso Actions: Read and write"); }
+  const r = await dispararWorkflow("garmin-sync.yml", {}, pat);
+  if (!r){ chip("Sin conexión para lanzar la sincronización"); return; }
+  if (r.status===204){
+    localStorage.setItem("last_trigger", String(Date.now()));
+    vigilarArchivo("garmin/summary.json", ()=>cargar(pat), "Sincronizando con Garmin… (~2 min, se actualizará sola)", "La sincronización sigue en marcha — recarga en unos minutos");
+  } else if (r.status===403 || r.status===404){ chip("Para sincronizar, tu llave necesita el permiso Actions: Read and write"); }
   else chip(`No pude lanzar la sincronización (${r.status})`);
 }
 function autoSync(){
@@ -875,6 +884,26 @@ function autoSync(){
   if (!ls) return;
   const iso = (ls.endsWith("Z") || ls.includes("+")) ? ls : ls + "Z";
   if (Date.now() - new Date(iso).getTime() > 60*60*1000) syncNow(true);
+}
+
+async function guardarObjetivosRemoto(){
+  const pat = localStorage.getItem(KEY);
+  const peso = $("obj-peso").value.trim();
+  const medidas = $("obj-medidas").value.trim();
+  if (!peso && !medidas){ chip("Escribe al menos un objetivo antes de guardar"); return; }
+  localStorage.setItem("salud_objetivos", JSON.stringify({peso, medidas})); // respaldo local inmediato
+  $("obj-estado").textContent = "Enviando a tu repositorio…";
+  const r = await dispararWorkflow("update-objetivos.yml", { peso_objetivo: peso, medidas_objetivo: medidas }, pat);
+  if (!r){ $("obj-estado").textContent = "Sin conexión para guardar en el repositorio."; return; }
+  if (r.status===204){
+    vigilarArchivo("app/salud-objetivos.json", async ()=>{ OBJETIVOS_REPO = await cargarObjetivosRepo(pat); pintarSalud(); },
+      "Guardando objetivos… (unos segundos)", "Sigue en marcha — recarga en un momento");
+    $("obj-estado").textContent = "Guardando en tu repositorio…";
+  } else if (r.status===403 || r.status===404){
+    $("obj-estado").textContent = "Guardado solo en este navegador — tu llave necesita el permiso Actions: Read and write para guardarlo en el repositorio.";
+  } else {
+    $("obj-estado").textContent = `No pude guardarlo en el repositorio (${r.status}) — quedó en este navegador.`;
+  }
 }
 
 // ── expandir/colapsar actividad: mapa + metricas + graficas + splits/zonas/clima ──
@@ -1041,11 +1070,7 @@ $("guardar").addEventListener("click", ()=>{ const p=$("llave").value.trim(); if
 $("sync").addEventListener("click", ()=>syncNow(false));
 $("cambiar").addEventListener("click", ()=>{ localStorage.removeItem(KEY); $("llave").value=""; $("guardar").disabled=true; pantalla("setup"); });
 $("fallo-llave").addEventListener("click", ()=>{ localStorage.removeItem(KEY); pantalla("setup"); });
-$("obj-guardar").addEventListener("click", ()=>{
-  const o = { peso: $("obj-peso").value.trim(), medidas: $("obj-medidas").value.trim() };
-  localStorage.setItem("salud_objetivos", JSON.stringify(o));
-  $("obj-estado").textContent = "Guardado en este navegador ✓ — para que se vea igual en todos tus dispositivos, pídeselo a Claude en el chat.";
-});
+$("obj-guardar").addEventListener("click", guardarObjetivosRemoto);
 document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }
   if (e.target.classList.contains("rangoS")){ document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarSueno(+e.target.dataset.n); }
