@@ -186,6 +186,45 @@ canvas{max-width:100%}
         <p id="obj-estado" class="sub" style="margin:8px 0 0"></p>
       </section>
       <p class="pie">v1 — los objetivos se guardan en este navegador; próximamente: peso y medidas reales desde Garmin y sistema de sugerencias</p>
+
+      <section class="tarjeta">
+        <div class="cab" style="cursor:pointer" id="bt-toggle">
+          <h2 class="disp">Body Type (somatotipo Heath-Carter)</h2>
+          <span class="btn disp" id="bt-flecha">▾</span>
+        </div>
+        <div class="expandible" id="bt-panel">
+          <p class="sub" style="margin:10px 0">Método científico estándar (Heath-Carter, 1967) para clasificar tu físico en tres componentes: endomorfia (adiposidad), mesomorfia (desarrollo músculo-esquelético) y ectomorfia (linealidad). La ectomorfia solo necesita altura y peso — ya los tenemos de tu perfil de Garmin. Endomorfia y mesomorfia requieren un calibrador de pliegues cutáneos: si no lo tienes, esos dos quedan pendientes en vez de adivinarse.</p>
+
+          <p class="disp sub" style="font-size:11px;margin:10px 0 4px">Siempre disponibles (de tu perfil Garmin)</p>
+          <div class="grid2">
+            <div class="met" style="cursor:default"><div class="disp et">Altura</div><div class="mono v" id="bt-altura-v">—</div><div class="n">cm</div></div>
+            <div class="met" style="cursor:default"><div class="disp et">Peso</div><div class="mono v" id="bt-peso-v">—</div><div class="n">kg</div></div>
+          </div>
+
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Pliegues cutáneos (mm) — calibrador</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input id="bt-triceps" type="number" step="0.1" placeholder="tríceps">
+            <input id="bt-subescapular" type="number" step="0.1" placeholder="subescapular">
+            <input id="bt-supraespinal" type="number" step="0.1" placeholder="supraespinal">
+            <input id="bt-pliegue-pantorrilla" type="number" step="0.1" placeholder="pliegue pantorrilla">
+          </div>
+
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Diámetros óseos (cm)</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input id="bt-humero" type="number" step="0.1" placeholder="húmero (biepicondíleo)">
+            <input id="bt-femur" type="number" step="0.1" placeholder="fémur (biepicondíleo)">
+          </div>
+
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Perímetros (cm)</p>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input id="bt-brazo" type="number" step="0.1" placeholder="brazo contraído">
+            <input id="bt-pantorrilla" type="number" step="0.1" placeholder="pantorrilla">
+          </div>
+
+          <button id="bt-calcular" class="boton disp" style="margin-top:12px">Calcular somatotipo</button>
+          <div id="bt-resultado" style="margin-top:14px"></div>
+        </div>
+      </section>
     </div>
 
     <p class="pie" id="pie"></p>
@@ -546,6 +585,90 @@ function pintarRitmoRun(runs){
 }
 
 let chartPeso=null;
+// ── Body Type: Heath-Carter, formulas oficiales verificadas ──
+function calcularSomatotipo(m){
+  const H = m.altura, W = m.peso; // cm, kg -- siempre presentes
+  let endo = null, meso = null;
+
+  const tieneEndoMeso = [m.triceps, m.subescapular, m.supraespinal, m.humero, m.femur, m.brazo, m.pantorrilla, m.pliegue_pantorrilla].every(v=>v!=null && !isNaN(v));
+
+  if (tieneEndoMeso){
+    const X = (m.triceps + m.subescapular + m.supraespinal) * (170.18 / H);
+    endo = -0.7182 + 0.1451*X - 0.00068*X*X + 0.0000014*X*X*X;
+    if (endo <= 0) endo = 0.1;
+
+    const brazoCorr = m.brazo - (m.triceps/10);
+    const pantorrillaCorr = m.pantorrilla - (m.pliegue_pantorrilla/10);
+    meso = 0.858*m.humero + 0.601*m.femur + 0.188*brazoCorr + 0.161*pantorrillaCorr - 0.131*H + 4.5;
+    if (meso <= 0) meso = 0.1;
+  }
+
+  const HWR = H / Math.cbrt(W);
+  let ecto;
+  if (HWR >= 40.75) ecto = 0.732*HWR - 28.58;
+  else if (HWR > 38.25) ecto = 0.463*HWR - 17.63;
+  else ecto = 0.1;
+  if (ecto <= 0) ecto = 0.1;
+
+  return { endo, meso, ecto: Math.round(ecto*10)/10 };
+}
+
+function pintarBodyType(){
+  const alt = BODY && BODY.profile && BODY.profile.userData && BODY.profile.userData.height;
+  const wraw = BODY && BODY.weight_raw;
+  const lista = wraw && wraw.dateWeightList ? [...wraw.dateWeightList].sort((a,b)=>a.calendarDate.localeCompare(b.calendarDate)) : [];
+  const pesoKg = lista.length ? Math.round(lista[lista.length-1].weight/100)/10 : null;
+  $("bt-altura-v").textContent = alt ?? "—";
+  $("bt-peso-v").textContent = pesoKg ?? "—";
+
+  try{
+    const g = JSON.parse(localStorage.getItem("bodytype_medidas")||"{}");
+    ["triceps","subescapular","supraespinal","pliegue-pantorrilla","humero","femur","brazo","pantorrilla"].forEach(id=>{
+      const key = id.replace("-","_");
+      if (g[key]!=null) $("bt-"+id).value = g[key];
+    });
+  }catch(e){}
+}
+
+$("bt-toggle").addEventListener("click", ()=>{
+  $("bt-panel").classList.toggle("abierto");
+  $("bt-flecha").textContent = $("bt-panel").classList.contains("abierto") ? "▴" : "▾";
+});
+
+$("bt-calcular").addEventListener("click", ()=>{
+  const alt = BODY && BODY.profile && BODY.profile.userData && BODY.profile.userData.height;
+  const wraw = BODY && BODY.weight_raw;
+  const lista = wraw && wraw.dateWeightList ? [...wraw.dateWeightList].sort((a,b)=>a.calendarDate.localeCompare(b.calendarDate)) : [];
+  const pesoKg = lista.length ? Math.round(lista[lista.length-1].weight/100)/10 : null;
+
+  if (!alt || !pesoKg){
+    $("bt-resultado").innerHTML = '<p class="err">Falta tu altura o peso de Garmin -- sin eso no se puede calcular ni la ectomorfia.</p>';
+    return;
+  }
+
+  const num = (id)=> { const v = parseFloat($("bt-"+id).value); return isNaN(v) ? null : v; };
+  const m = {
+    altura: alt, peso: pesoKg,
+    triceps: num("triceps"), subescapular: num("subescapular"), supraespinal: num("supraespinal"),
+    pliegue_pantorrilla: num("pliegue-pantorrilla"), humero: num("humero"), femur: num("femur"),
+    brazo: num("brazo"), pantorrilla: num("pantorrilla"),
+  };
+  localStorage.setItem("bodytype_medidas", JSON.stringify(m));
+
+  const r = calcularSomatotipo(m);
+  let html = `<div class="grid3">
+    <div class="met" style="cursor:default"><div class="disp et">Endomorfia</div><div class="mono v" style="color:${css('--bateria')}">${r.endo!=null?Math.round(r.endo*10)/10:"—"}</div><div class="n">${r.endo!=null?"":"necesita calibrador"}</div></div>
+    <div class="met" style="cursor:default"><div class="disp et">Mesomorfia</div><div class="mono v" style="color:${css('--alba')}">${r.meso!=null?Math.round(r.meso*10)/10:"—"}</div><div class="n">${r.meso!=null?"":"necesita calibrador"}</div></div>
+    <div class="met" style="cursor:default"><div class="disp et">Ectomorfia</div><div class="mono v" style="color:${css('--hrv')}">${r.ecto}</div><div class="n">siempre calculable</div></div>
+  </div>`;
+  if (r.endo==null || r.meso==null){
+    html += `<p class="sub" style="margin-top:8px">Endomorfia y mesomorfia requieren el calibrador de pliegues cutáneos -- no se inventan ni se estiman sin él. En cuanto consigas uno, vuelve a calcular con los mismos datos.</p>`;
+  } else {
+    html += `<p class="sub" style="margin-top:8px">Somatotipo completo: ${Math.round(r.endo*10)/10}-${Math.round(r.meso*10)/10}-${r.ecto} (endo-meso-ecto), método Heath-Carter.</p>`;
+  }
+  $("bt-resultado").innerHTML = html;
+});
+
 function pintarSalud(){
   const ud = BODY && BODY.profile && BODY.profile.userData;
   const alt = ud && ud.height;
@@ -687,6 +810,7 @@ function pintar(){
   $("var-lista").innerHTML = varias.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin otras actividades.</p>';
   pintarCiclismo();
   pintarSalud();
+  pintarBodyType();
 
   $("pie").textContent = `Datos leídos en vivo de tu repositorio privado · ${wAll.length} días de histórico · ${$("pie").dataset.perfil||""}`;
 }
