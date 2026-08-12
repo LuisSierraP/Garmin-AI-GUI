@@ -46,6 +46,7 @@ canvas{max-width:100%}
 .nota-tecnica{background:rgba(79,179,165,.08);border:1px solid var(--hrv);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px;display:flex;gap:8px;align-items:flex-start;color:var(--tinta)}
 .nota-version{background:rgba(240,169,74,.08);border:1px solid var(--alba);border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;display:flex;gap:8px;align-items:flex-start;color:var(--suave)}
 .nota-tecnica .ic, .nota-version .ic{flex-shrink:0}
+#definicion{position:fixed;left:14px;right:14px;bottom:14px;max-width:612px;margin:0 auto;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .expandible{overflow:hidden;max-height:0;transition:max-height .25s ease}
 .expandible.abierto{max-height:none}
 .mapa-act{height:260px;border-radius:12px;margin-top:10px;background:var(--borde)}
@@ -111,10 +112,6 @@ canvas{max-width:100%}
       </section>
 
       <div class="grid2" id="metricas"></div>
-      <section class="tarjeta oculto" id="definicion">
-        <div class="cab"><h2 class="disp" id="def-titulo"></h2><button class="btn" onclick="document.getElementById('definicion').classList.add('oculto')">✕</button></div>
-        <p id="def-texto" style="font-size:14px;margin:0;line-height:1.5"></p>
-      </section>
 
       <section class="tarjeta">
         <div class="cab" style="align-items:center">
@@ -232,6 +229,11 @@ canvas{max-width:100%}
     </div>
 
     <p class="pie" id="pie"></p>
+
+    <section class="tarjeta oculto" id="definicion">
+      <div class="cab"><h2 class="disp" id="def-titulo"></h2><button class="btn" onclick="document.getElementById('definicion').classList.add('oculto')">✕</button></div>
+      <p id="def-texto" style="font-size:14px;margin:0;line-height:1.5"></p>
+    </section>
     </div>
   </div>
 </div>
@@ -1077,7 +1079,6 @@ document.addEventListener("click",(e)=>{
     const [t,txt] = DEFS[card.dataset.def];
     $("def-titulo").textContent = t; $("def-texto").innerHTML = txt.replaceAll("\n","<br>");
     $("definicion").classList.remove("oculto");
-    $("definicion").scrollIntoView({behavior:"smooth", block:"nearest"});
   }
 });
 
