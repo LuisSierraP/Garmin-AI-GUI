@@ -524,14 +524,22 @@ function pintarRendimiento(){
   const p = DATOS.performance;
   if (!p){ $("bici-rendimiento").innerHTML=""; $("run-rendimiento").innerHTML=""; $("training-status-card").style.display="none"; return; }
 
-  const mm = p.max_metrics && (Array.isArray(p.max_metrics)?p.max_metrics[0]:p.max_metrics);
-  const vo2run = mm && (mm.vo2MaxPreciseValue ?? mm.vo2MaxValue);
-  const vo2bike = mm && mm.cycling && (mm.cycling.vo2MaxPreciseValue ?? mm.cycling.vo2MaxValue);
-  const fitAge = mm && mm.fitnessAge;
+  // Forma real confirmada contra Garmin el 2026-08-12 (antes era una suposicion sin verificar)
+  const ts = p.training_status || {};
+  const vo2 = ts.mostRecentVO2Max || {};
+  const vo2run = vo2.generic && (vo2.generic.vo2MaxPreciseValue ?? vo2.generic.vo2MaxValue);
+  const vo2bike = vo2.cycling && (vo2.cycling.vo2MaxPreciseValue ?? vo2.cycling.vo2MaxValue);
+  const fitAge = vo2.generic && vo2.generic.fitnessAge;
+
+  const ftpCiclismo = Array.isArray(p.ftp) ? p.ftp.find(f=>f.sport==="CYCLING") : null;
+
+  const statusData = ts.mostRecentTrainingStatus && ts.mostRecentTrainingStatus.latestTrainingStatusData;
+  const primerDispositivo = statusData && Object.values(statusData)[0];
+  const estado = primerDispositivo && primerDispositivo.trainingStatusFeedbackPhrase;
 
   const bici = [];
   if (vo2bike!=null) bici.push(["vo2bici","VO2 máx ciclismo",vo2bike,"ml/kg/min",null,css('--hrv')]);
-  if (p.ftp) bici.push(["ftp","FTP",p.ftp.ftpValue ?? p.ftp,"W",null,css('--alba')]);
+  if (ftpCiclismo) bici.push(["ftp","FTP",Math.round(ftpCiclismo.functionalThresholdPower),"W",null,css('--alba')]);
   if (p.hill_score && p.hill_score.overallScore!=null) bici.push(["hill","Hill Score",p.hill_score.overallScore,"/100",null,css('--sueno')]);
   if (p.endurance_score && p.endurance_score.overallScore!=null) bici.push(["endurance","Endurance Score",p.endurance_score.overallScore,"/100",null,css('--bateria')]);
   $("bici-rendimiento").innerHTML = rejillaMetricas(bici);
@@ -541,13 +549,11 @@ function pintarRendimiento(){
   if (fitAge!=null) run.push(["fitage","Edad de fitness",fitAge,"años",null,css('--suave')]);
   const preds = p.race_predictions;
   if (preds){
-    const mapa = {predicted5K:"5K",predicted10K:"10K",predictedHalfMarathon:"21K",predictedMarathon:"42K"};
+    const mapa = {time5K:"5K",time10K:"10K",timeHalfMarathon:"21K",timeMarathon:"42K"};
     Object.entries(mapa).forEach(([k,label])=>{ if (preds[k]) run.push([`pred${k}`,`Predicción ${label}`, dur(preds[k]), "", null, css('--fc')]); });
   }
   $("run-rendimiento").innerHTML = rejillaMetricas(run);
 
-  const ts = p.training_status && (Array.isArray(p.training_status)?p.training_status[0]:p.training_status);
-  const estado = ts && (ts.trainingStatus || ts.trainingStatusFeedbackPhrase);
   if (estado){
     $("training-status-card").style.display = "";
     $("training-status-txt").textContent = String(estado).replaceAll("_"," ").toLowerCase();
