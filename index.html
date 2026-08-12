@@ -43,6 +43,9 @@ input[type=password],input[type=number],input[type=text]{width:100%;padding:12px
 canvas{max-width:100%}
 .pie{font-size:12px;color:var(--suave);text-align:center;margin-top:18px}
 .oculto{display:none}
+.nota-tecnica{background:rgba(79,179,165,.08);border:1px solid var(--hrv);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px;display:flex;gap:8px;align-items:flex-start;color:var(--tinta)}
+.nota-version{background:rgba(240,169,74,.08);border:1px solid var(--alba);border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;display:flex;gap:8px;align-items:flex-start;color:var(--suave)}
+.nota-tecnica .ic, .nota-version .ic{flex-shrink:0}
 .expandible{overflow:hidden;max-height:0;transition:max-height .25s ease}
 .expandible.abierto{max-height:none}
 .mapa-act{height:260px;border-radius:12px;margin-top:10px;background:var(--borde)}
@@ -152,7 +155,7 @@ canvas{max-width:100%}
       </section>
       <section class="tarjeta"><h2 class="disp">Carga semanal (km)</h2><canvas id="cBiciSemanas" height="150"></canvas></section>
       <section class="tarjeta"><h2 class="disp">Salidas</h2><div id="bici-lista"></div></section>
-      <p class="pie">v1 — próximamente: VO2 máx, mapas de recorrido y filtro por gear</p>
+      <div class="nota-version"><span class="ic">🚧</span><span>v1 — próximamente: VO2 máx, mapas de recorrido y filtro por gear</span></div>
     </div>
 
     <!-- ══════════ TAB RUNNING ══════════ -->
@@ -161,7 +164,7 @@ canvas{max-width:100%}
       <section class="tarjeta"><h2 class="disp">Km recorridos</h2><div class="grid3" id="run-kms"></div></section>
       <section class="tarjeta"><h2 class="disp">Progresión de ritmo</h2><canvas id="cRunRitmo" height="150"></canvas></section>
       <section class="tarjeta"><h2 class="disp">Carreras</h2><div id="run-lista"></div></section>
-      <p class="pie">v1 — próximamente: VO2 máx, progresión de ritmo y mapas</p>
+      <div class="nota-version"><span class="ic">🚧</span><span>v1 — próximamente: VO2 máx, progresión de ritmo y mapas</span></div>
     </div>
 
     <!-- ══════════ TAB VARIAS ══════════ -->
@@ -185,7 +188,7 @@ canvas{max-width:100%}
         <button id="obj-guardar" class="boton disp">Guardar objetivos</button>
         <p id="obj-estado" class="sub" style="margin:8px 0 0"></p>
       </section>
-      <p class="pie">v1 — los objetivos se guardan en este navegador; próximamente: peso y medidas reales desde Garmin y sistema de sugerencias</p>
+      <div class="nota-version"><span class="ic">🚧</span><span>v1 — los objetivos se guardan en este navegador; próximamente: peso y medidas reales desde Garmin y sistema de sugerencias</span></div>
 
       <section class="tarjeta">
         <div class="cab" style="cursor:pointer" id="bt-toggle">
@@ -193,7 +196,8 @@ canvas{max-width:100%}
           <span class="btn disp" id="bt-flecha">▾</span>
         </div>
         <div class="expandible" id="bt-panel">
-          <p class="sub" style="margin:10px 0">Método científico estándar (Heath-Carter, 1967) para clasificar tu físico en tres componentes: endomorfia (adiposidad), mesomorfia (desarrollo músculo-esquelético) y ectomorfia (linealidad). La ectomorfia solo necesita altura y peso — ya los tenemos de tu perfil de Garmin. Endomorfia y mesomorfia requieren un calibrador de pliegues cutáneos: si no lo tienes, esos dos quedan pendientes en vez de adivinarse.</p>
+          <p class="sub" style="margin:10px 0">Clasifica tu físico en tres componentes: endomorfia, mesomorfia y ectomorfia. Toca cualquier resultado para ver qué significa.</p>
+          <div class="nota-tecnica"><span class="ic">ℹ️</span><span>La ectomorfia solo necesita altura y peso — ya los tenemos de tu perfil de Garmin. Endomorfia y mesomorfia requieren un calibrador de pliegues cutáneos: si no lo tienes, esos dos quedan pendientes en vez de adivinarse.</span></div>
 
           <p class="disp sub" style="font-size:11px;margin:10px 0 4px">Siempre disponibles (de tu perfil Garmin)</p>
           <div class="grid2">
@@ -265,6 +269,9 @@ const DEFS = {
   edad: ["Edad", "Calculada desde tu fecha de nacimiento en el perfil de Garmin."],
   vo2: ["VO2 máx (running)", "Volumen máximo de oxígeno que tu cuerpo puede usar corriendo. Cuanto más alto, mejor tu capacidad aeróbica. Estimado por Garmin a partir de tus carreras."],
   umbral: ["Umbral de lactato", "La FC a partir de la cual tu cuerpo acumula lactato más rápido de lo que puede eliminarlo. Marca el límite entre esfuerzo sostenible y no sostenible; útil para definir zonas de entrenamiento."],
+  endo: ["Endomorfia", "Mide la adiposidad relativa (grasa corporal) en la escala Heath-Carter. Valores bajos (cerca de 0.1, el mínimo posible) indican poca grasa relativa; valores altos indican más. Necesita el calibrador de pliegues cutáneos para calcularse."],
+  meso: ["Mesomorfia", "Mide el desarrollo músculo-esquelético relativo a tu altura: cuánto hueso y músculo tienes comparado con alguien de tu misma estatura. Valores altos = complexión más robusta/musculosa. Necesita diámetros óseos y perímetros para calcularse."],
+  ecto: ["Ectomorfia", "Mide la linealidad: cuán delgado y estirado es tu cuerpo en relación a tu peso. Se calcula solo con altura y peso (relación altura/raíz cúbica del peso). El mínimo posible es 0.1 -- lo obtienes cuando tu peso es alto en relación a tu altura, es decir, cuanto más lejos estás de un cuerpo 'lineal y delgado', más se acerca tu ectomorfia a ese suelo de 0.1. No es un error ni un 'mal resultado': es la escala haciendo su trabajo."],
   vo2bici: ["VO2 máx ciclismo", "Volumen máximo de oxígeno en bici. Complementa tu VO2 de running -- suelen diferir porque implican grupos musculares distintos."],
   ftp: ["FTP", "Potencia máxima que puedes sostener durante ~1 hora. Referencia estándar para definir zonas de entrenamiento en bici con potenciómetro."],
   hill: ["Hill Score", "Estimación de tu capacidad para subir pendientes, combinando fuerza y resistencia en terreno inclinado."],
@@ -274,6 +281,10 @@ const DEFS = {
 };
 
 const $ = (id) => document.getElementById(id);
+// Dos categorias de aviso, con nombre propio para poder pedir luego "esconde los nota-tecnica"
+// o "esconde los nota-version" y localizarlos todos de una.
+const notaTecnica = (txt) => `<div class="nota-tecnica"><span class="ic">ℹ️</span><span>${txt}</span></div>`;
+const notaVersion = (txt) => `<div class="nota-version"><span class="ic">🚧</span><span>${txt}</span></div>`;
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
 let DATOS=null, CONFIG=null, GEARR=null, BODY=null, OBJETIVOS_REPO=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
@@ -657,12 +668,12 @@ $("bt-calcular").addEventListener("click", ()=>{
 
   const r = calcularSomatotipo(m);
   let html = `<div class="grid3">
-    <div class="met" style="cursor:default"><div class="disp et">Endomorfia</div><div class="mono v" style="color:${css('--bateria')}">${r.endo!=null?Math.round(r.endo*10)/10:"—"}</div><div class="n">${r.endo!=null?"":"necesita calibrador"}</div></div>
-    <div class="met" style="cursor:default"><div class="disp et">Mesomorfia</div><div class="mono v" style="color:${css('--alba')}">${r.meso!=null?Math.round(r.meso*10)/10:"—"}</div><div class="n">${r.meso!=null?"":"necesita calibrador"}</div></div>
-    <div class="met" style="cursor:default"><div class="disp et">Ectomorfia</div><div class="mono v" style="color:${css('--hrv')}">${r.ecto}</div><div class="n">siempre calculable</div></div>
+    <div class="met" data-def="endo"><div class="disp et">Endomorfia</div><div class="mono v" style="color:${css('--bateria')}">${r.endo!=null?Math.round(r.endo*10)/10:"—"}</div><div class="n">${r.endo!=null?"toca para saber qué es":"necesita calibrador"}</div></div>
+    <div class="met" data-def="meso"><div class="disp et">Mesomorfia</div><div class="mono v" style="color:${css('--alba')}">${r.meso!=null?Math.round(r.meso*10)/10:"—"}</div><div class="n">${r.meso!=null?"toca para saber qué es":"necesita calibrador"}</div></div>
+    <div class="met" data-def="ecto"><div class="disp et">Ectomorfia</div><div class="mono v" style="color:${css('--hrv')}">${r.ecto}</div><div class="n">toca para saber qué es</div></div>
   </div>`;
   if (r.endo==null || r.meso==null){
-    html += `<p class="sub" style="margin-top:8px">Endomorfia y mesomorfia requieren el calibrador de pliegues cutáneos -- no se inventan ni se estiman sin él. En cuanto consigas uno, vuelve a calcular con los mismos datos.</p>`;
+    html += notaTecnica("Endomorfia y mesomorfia requieren el calibrador de pliegues cutáneos — no se inventan ni se estiman sin él. En cuanto consigas uno, vuelve a calcular con los mismos datos.");
   } else {
     html += `<p class="sub" style="margin-top:8px">Somatotipo completo: ${Math.round(r.endo*10)/10}-${Math.round(r.meso*10)/10}-${r.ecto} (endo-meso-ecto), método Heath-Carter.</p>`;
   }
