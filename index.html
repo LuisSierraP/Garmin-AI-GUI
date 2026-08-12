@@ -184,6 +184,8 @@ canvas{max-width:100%}
         <input id="obj-medidas" type="text" placeholder="p. ej. cintura 84 cm">
         <button id="obj-guardar" class="boton disp">Guardar objetivos</button>
         <p id="obj-estado" class="sub" style="margin:8px 0 0"></p>
+        <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Historial de objetivos</p>
+        <div id="obj-historial"></div>
       </section>
       <div class="nota-version"><span class="ic">🚧</span><span>v1 — los objetivos se guardan en este navegador; próximamente: peso y medidas reales desde Garmin y sistema de sugerencias</span></div>
 
@@ -219,8 +221,14 @@ canvas{max-width:100%}
             <input id="bt-pantorrilla" type="number" step="0.1" placeholder="pantorrilla">
           </div>
 
-          <button id="bt-calcular" class="boton disp" style="margin-top:12px">Calcular somatotipo</button>
+          <div style="display:flex;gap:6px;margin-top:12px">
+            <button id="bt-calcular" class="boton disp" style="flex:1">Calcular</button>
+            <button id="bt-guardar" class="boton disp" style="flex:1;background:var(--bateria)">Guardar en repo</button>
+          </div>
+          <p id="bt-estado" class="sub" style="margin:8px 0 0"></p>
           <div id="bt-resultado" style="margin-top:14px"></div>
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Historial de mediciones</p>
+          <div id="bt-historial"></div>
         </div>
       </section>
     </div>
@@ -297,7 +305,7 @@ const notaTecnica = (txt) => `<div class="nota-tecnica"><span class="ic">ℹ️<
 const notaVersion = (txt) => `<div class="nota-version"><span class="ic">🚧</span><span>${txt}</span></div>`;
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, CONFIG=null, GEARR=null, BODY=null, OBJETIVOS_REPO=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
+let DATOS=null, CONFIG=null, GEARR=null, BODY=null, OBJETIVOS_REPO=null, BODYTYPE_HIST=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
 const TODAS_TABS = ["general","ciclismo","running","varias","salud"];
 const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
 
@@ -320,12 +328,7 @@ async function cargarBody(pat){
     BODY = r.ok ? await r.json() : null;
   }catch(e){ BODY = null; }
 }
-async function cargarObjetivosRepo(pat){
-  try{
-    const r = await fetchRepo('contents/app/salud-objetivos.json', { pat });
-    return r.ok ? await r.json() : null;
-  }catch(e){ return null; }
-}
+
 function gearFisico(a){ // id para FILTRAR: el nombre real de Garmin, o "other" si no esta definido
   return a.gear_garmin || "other";
 }
@@ -368,7 +371,8 @@ async function cargar(pat){
   await cargarConfig(pat);
   await cargarGear(pat);
   await cargarBody(pat);
-  OBJETIVOS_REPO = await cargarObjetivosRepo(pat);
+  OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
+  BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
   renderTabs();
   pintar();
   pantalla("panel");
@@ -654,6 +658,9 @@ function pintarBodyType(){
       if (g[key]!=null) $("bt-"+id).value = g[key];
     });
   }catch(e){}
+  $("bt-historial").innerHTML = tablaHistorialHTML(BODYTYPE_HIST||[], [
+    ["endo","Endo"],["meso","Meso"],["ecto","Ecto"]
+  ]);
 }
 
 $("bt-toggle").addEventListener("click", ()=>{
@@ -661,16 +668,13 @@ $("bt-toggle").addEventListener("click", ()=>{
   $("bt-flecha").textContent = $("bt-panel").classList.contains("abierto") ? "▴" : "▾";
 });
 
-$("bt-calcular").addEventListener("click", ()=>{
+let ultimoCalculoBT = null;
+function leerYCalcularBT(){
   const alt = BODY && BODY.profile && BODY.profile.userData && BODY.profile.userData.height;
   const wraw = BODY && BODY.weight_raw;
   const lista = wraw && wraw.dateWeightList ? [...wraw.dateWeightList].sort((a,b)=>a.calendarDate.localeCompare(b.calendarDate)) : [];
   const pesoKg = lista.length ? Math.round(lista[lista.length-1].weight/100)/10 : null;
-
-  if (!alt || !pesoKg){
-    $("bt-resultado").innerHTML = '<p class="err">Falta tu altura o peso de Garmin -- sin eso no se puede calcular ni la ectomorfia.</p>';
-    return;
-  }
+  if (!alt || !pesoKg) return null;
 
   const num = (id)=> { const v = parseFloat($("bt-"+id).value); return isNaN(v) ? null : v; };
   const m = {
@@ -680,8 +684,17 @@ $("bt-calcular").addEventListener("click", ()=>{
     brazo: num("brazo"), pantorrilla: num("pantorrilla"),
   };
   localStorage.setItem("bodytype_medidas", JSON.stringify(m));
+  return { m, r: calcularSomatotipo(m) };
+}
 
-  const r = calcularSomatotipo(m);
+$("bt-calcular").addEventListener("click", ()=>{
+  const calculo = leerYCalcularBT();
+  if (!calculo){
+    $("bt-resultado").innerHTML = '<p class="err">Falta tu altura o peso de Garmin -- sin eso no se puede calcular ni la ectomorfia.</p>';
+    return;
+  }
+  ultimoCalculoBT = calculo;
+  const { r } = calculo;
   let html = `<div class="grid3">` + rejillaMetricas([
     ["endo", "Endomorfia", r.endo!=null?Math.round(r.endo*10)/10:"—", "", r.endo!=null?"toca para saber qué es":"necesita calibrador", css('--bateria')],
     ["meso", "Mesomorfia", r.meso!=null?Math.round(r.meso*10)/10:"—", "", r.meso!=null?"toca para saber qué es":"necesita calibrador", css('--alba')],
@@ -693,6 +706,23 @@ $("bt-calcular").addEventListener("click", ()=>{
     html += `<p class="sub" style="margin-top:8px">Somatotipo completo: ${Math.round(r.endo*10)/10}-${Math.round(r.meso*10)/10}-${r.ecto} (endo-meso-ecto), método Heath-Carter.</p>`;
   }
   $("bt-resultado").innerHTML = html;
+});
+
+$("bt-guardar").addEventListener("click", async ()=>{
+  if (!ultimoCalculoBT){ $("bt-estado").textContent = "Pulsa Calcular primero."; return; }
+  const { m, r } = ultimoCalculoBT;
+  const datos = { ...m,
+    endo: r.endo!=null?Math.round(r.endo*10)/10:null,
+    meso: r.meso!=null?Math.round(r.meso*10)/10:null,
+    ecto: r.ecto };
+  const ok = await guardarConDatos("bodytype", datos, $("bt-estado"));
+  if (ok){
+    const pat = localStorage.getItem(KEY);
+    vigilarArchivo("app/historial-bodytype.json", async ()=>{
+      BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
+      $("bt-historial").innerHTML = tablaHistorialHTML(BODYTYPE_HIST||[], [["endo","Endo"],["meso","Meso"],["ecto","Ecto"]]);
+    }, "Guardando medición… (unos segundos)", "Sigue en marcha — recarga en un momento");
+  }
 });
 
 function pintarSalud(){
@@ -724,13 +754,15 @@ function pintarSalud(){
       options: baseOpts("kg") });
   } else { $("salud-peso-card").style.display = "none"; }
 
-  const o = OBJETIVOS_REPO || (()=>{ try{ return JSON.parse(localStorage.getItem("salud_objetivos")||"{}"); }catch(e){ return {}; } })();
-  if (o.peso_objetivo || o.peso) $("obj-peso").value = o.peso_objetivo || o.peso;
-  if (o.medidas_objetivo || o.medidas) $("obj-medidas").value = o.medidas_objetivo || o.medidas;
-  if (o.peso_objetivo || o.peso || o.medidas_objetivo || o.medidas){
-    const fuente = OBJETIVOS_REPO ? "guardado en tu repo" : "guardado solo en este navegador";
-    $("obj-estado").textContent = `Objetivos: ${[  (o.peso_objetivo||o.peso)?(o.peso_objetivo||o.peso)+" kg":null, o.medidas_objetivo||o.medidas].filter(Boolean).join(" · ")} (${fuente})`;
+  const historial = OBJETIVOS_REPO && OBJETIVOS_REPO.length ? OBJETIVOS_REPO : null;
+  const o = historial ? historial[historial.length-1].datos : (()=>{ try{ return JSON.parse(localStorage.getItem("salud_objetivos")||"{}"); }catch(e){ return {}; } })();
+  if (o.peso) $("obj-peso").value = o.peso;
+  if (o.medidas) $("obj-medidas").value = o.medidas;
+  if (o.peso || o.medidas){
+    const fuente = historial ? "guardado en tu repo" : "guardado solo en este navegador";
+    $("obj-estado").textContent = `Objetivos: ${[o.peso?o.peso+" kg":null, o.medidas].filter(Boolean).join(" · ")} (${fuente})`;
   }
+  $("obj-historial").innerHTML = tablaHistorialHTML(historial||[], [["peso","Peso obj."],["medidas","Medidas obj."]]);
 }
 
 function rango(vals){
@@ -886,23 +918,60 @@ function autoSync(){
   if (Date.now() - new Date(iso).getTime() > 60*60*1000) syncNow(true);
 }
 
-async function guardarObjetivosRemoto(){
+// ── historial generico: guardar/cargar/pintar. Cualquier boton futuro que envie
+// datos reutiliza estas tres funciones -- nunca hace falta un mecanismo nuevo.
+async function cargarHistorial(categoria, pat){
+  try{
+    const r = await fetchRepo(`contents/app/historial-${categoria}.json`, { pat });
+    if (!r.ok) return [];
+    const h = await r.json();
+    return Array.isArray(h) ? h : [];
+  }catch(e){ return []; }
+}
+async function guardarConDatos(categoria, datos, statusEl){
   const pat = localStorage.getItem(KEY);
+  if (statusEl) statusEl.textContent = "Enviando a tu repositorio…";
+  const r = await dispararWorkflow("guardar-historial.yml", { categoria, datos_json: JSON.stringify(datos) }, pat);
+  if (!r){ if (statusEl) statusEl.textContent = "Sin conexión para guardar en el repositorio."; return false; }
+  if (r.status===204){
+    if (statusEl) statusEl.textContent = "Guardando en tu repositorio…";
+    return true;
+  }
+  if (statusEl) statusEl.textContent = (r.status===403||r.status===404)
+    ? "Tu llave necesita el permiso Actions: Read and write para guardar en el repositorio."
+    : `No pude guardarlo en el repositorio (${r.status}).`;
+  return false;
+}
+function fFechaHistorial(iso){
+  const d = new Date(iso.endsWith("Z")?iso:iso+"Z");
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+// columnas: lista de [claveEnDatos, etiqueta]. Pinta mas reciente primero.
+function tablaHistorialHTML(entradas, columnas){
+  if (!entradas.length) return '<p class="sub">Sin envíos todavía.</p>';
+  const filas = [...entradas].reverse().map(e=>{
+    const celdas = columnas.map(([clave])=> e.datos?.[clave] ?? "—").join('</td><td style="padding:6px 8px">');
+    return `<tr><td style="padding:6px 8px;white-space:nowrap" class="sub">${fFechaHistorial(e.fecha)}</td><td style="padding:6px 8px">${celdas}</td></tr>`;
+  }).join("");
+  const cab = columnas.map(([,et])=>`<th style="padding:6px 8px;text-align:left" class="sub disp">${et}</th>`).join("");
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr><th style="padding:6px 8px;text-align:left" class="sub disp">Fecha</th>${cab}</tr></thead>
+    <tbody>${filas}</tbody></table></div>`;
+}
+
+async function guardarObjetivosRemoto(){
   const peso = $("obj-peso").value.trim();
   const medidas = $("obj-medidas").value.trim();
   if (!peso && !medidas){ chip("Escribe al menos un objetivo antes de guardar"); return; }
   localStorage.setItem("salud_objetivos", JSON.stringify({peso, medidas})); // respaldo local inmediato
-  $("obj-estado").textContent = "Enviando a tu repositorio…";
-  const r = await dispararWorkflow("update-objetivos.yml", { peso_objetivo: peso, medidas_objetivo: medidas }, pat);
-  if (!r){ $("obj-estado").textContent = "Sin conexión para guardar en el repositorio."; return; }
-  if (r.status===204){
-    vigilarArchivo("app/salud-objetivos.json", async ()=>{ OBJETIVOS_REPO = await cargarObjetivosRepo(pat); pintarSalud(); },
-      "Guardando objetivos… (unos segundos)", "Sigue en marcha — recarga en un momento");
-    $("obj-estado").textContent = "Guardando en tu repositorio…";
-  } else if (r.status===403 || r.status===404){
-    $("obj-estado").textContent = "Guardado solo en este navegador — tu llave necesita el permiso Actions: Read and write para guardarlo en el repositorio.";
-  } else {
-    $("obj-estado").textContent = `No pude guardarlo en el repositorio (${r.status}) — quedó en este navegador.`;
+  const ok = await guardarConDatos("objetivos", { peso, medidas }, $("obj-estado"));
+  if (ok){
+    const pat = localStorage.getItem(KEY);
+    vigilarArchivo("app/historial-objetivos.json", async ()=>{
+      OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
+  BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
+      pintarSalud();
+    }, "Guardando objetivos… (unos segundos)", "Sigue en marcha — recarga en un momento");
   }
 }
 
