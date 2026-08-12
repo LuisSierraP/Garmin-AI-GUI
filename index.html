@@ -250,27 +250,12 @@ async function cargarBody(pat){
     BODY = r.ok ? await r.json() : null;
   }catch(e){ BODY = null; }
 }
-function nombreAId(nombre){ // normaliza "Canyon Grizl 5 AL" -> "grizl" usando gear-reglas.json
-  if (!GEARR || !nombre) return null;
-  const n = nombre.toLowerCase();
-  for (const [id,label] of Object.entries(GEARR.gears||{})) if (n.includes(id) || label.toLowerCase().includes(n) || n.includes(label.toLowerCase().split(" ")[0])) return id;
-  return null;
-}
-function gearFisico(a){ // bici REAL usada -- esto es lo que se filtra. Prioridad: gear real de Garmin; si no existe, regla por fecha
-  const real = nombreAId(a.gear_garmin);
-  if (real) return real;
-  if (!GEARR) return null;
-  const t = a.type||"", d = (a.start_local||"").slice(0,10), corte = GEARR.fecha_corte||"2026-03-15";
-  if (t.includes("indoor")) return "trek";
-  if (d >= corte) return "grizl";
-  if (t.includes("road")) return "trek";
-  return "commute";
+function gearFisico(a){ // id para FILTRAR: el nombre real de Garmin, o "other" si no esta definido
+  return a.gear_garmin || "other";
 }
 function gearEtiqueta(a){ // lo que se MUESTRA en cada fila
-  if (a.gear_garmin) return (a.type||"").includes("indoor") ? (GEARR&&GEARR.indoor_display||"Rodillo") : a.gear_garmin;
-  if (!GEARR) return "";
-  if ((a.type||"").includes("indoor")) return GEARR.indoor_display || "Rodillo";
-  return GEARR.gears[gearFisico(a)] || "";
+  if ((a.type||"").includes("indoor")) return a.gear_garmin || (GEARR&&GEARR.indoor_display) || "Rodillo";
+  return a.gear_garmin || "Otro";
 }
 
 function perfilActivo(){
@@ -396,6 +381,52 @@ function kmsHTML(acts){
      <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
        <span class="mono v" style="color:${css('--alba')}">${sumKm(acts,d)}</span><span class="u">km</span></div></div>`).join("");
 }
+const MUSCULOS = {
+  BENCH_PRESS:["pecho","triceps","hombro_frontal"], PUSH_UP:["pecho","triceps","hombro_frontal"],
+  SHOULDER_PRESS:["hombro_frontal","hombro_lateral","triceps"], LATERAL_RAISE:["hombro_lateral"],
+  ROW:["espalda_alta","biceps","hombro_posterior"], LAT_PULLDOWN:["dorsal","biceps"], PULL_UP:["dorsal","biceps"],
+  DEADLIFT:["espalda_baja","gluteo","isquiotibial"], SQUAT:["cuadriceps","gluteo"], LUNGE:["cuadriceps","gluteo"],
+  LEG_PRESS:["cuadriceps","gluteo"], LEG_EXTENSION:["cuadriceps"], LEG_CURL:["isquiotibial"],
+  CALF_RAISE:["gemelo"], BICEP_CURL:["biceps"], TRICEP_EXTENSION:["triceps"], DIP:["triceps","pecho"],
+  PLANK:["core"], CRUNCH:["core"], CORE:["core"], CABLE_PULL:["dorsal","biceps"],
+};
+const MUSCULOS_NOMBRE = {pecho:"Pecho",triceps:"Tríceps",biceps:"Bíceps",hombro_frontal:"Hombro (frontal)",hombro_lateral:"Hombro (lateral)",hombro_posterior:"Hombro (posterior)",espalda_alta:"Espalda alta",espalda_baja:"Espalda baja",dorsal:"Dorsal",gluteo:"Glúteo",cuadriceps:"Cuádriceps",isquiotibial:"Isquiotibial",gemelo:"Gemelo",core:"Core / abdomen"};
+const CATEGORIA_NOMBRE = {BENCH_PRESS:"Press banca",PUSH_UP:"Flexiones",SHOULDER_PRESS:"Press hombro",LATERAL_RAISE:"Elevación lateral",ROW:"Remo",LAT_PULLDOWN:"Jalón dorsal",PULL_UP:"Dominadas",DEADLIFT:"Peso muerto",SQUAT:"Sentadilla",LUNGE:"Zancada",LEG_PRESS:"Prensa piernas",LEG_EXTENSION:"Extensión cuádriceps",LEG_CURL:"Curl femoral",CALF_RAISE:"Elevación talones",BICEP_CURL:"Curl bíceps",TRICEP_EXTENSION:"Extensión tríceps",DIP:"Fondos",PLANK:"Plancha",CRUNCH:"Abdominales",CORE:"Core",CABLE_PULL:"Polea"};
+
+function diagramaCuerpo(musculosActivos){
+  // silueta simplificada frontal; cada region es una forma coloreable
+  const activo = (id)=> musculosActivos.has(id);
+  const col = (id)=> activo(id) ? css('--alba') : css('--borde');
+  const region = (id, d) => `<path d="${d}" fill="${col(id)}" stroke="${css('--fondo')}" stroke-width="1.5"/>`;
+  return `<svg viewBox="0 0 140 220" style="width:100%;max-width:180px;display:block;margin:8px auto">
+    <ellipse cx="70" cy="18" rx="14" ry="16" fill="${css('--contorno')}"/>
+    ${region("hombro_frontal","M40,42 Q70,32 100,42 L96,58 Q70,48 44,58 Z")}
+    ${region("pecho","M46,58 Q70,50 94,58 L92,86 Q70,94 48,86 Z")}
+    ${region("biceps","M32,60 Q26,80 30,100 L42,98 Q40,78 44,60 Z")}
+    ${region("biceps","M108,60 Q114,80 110,100 L98,98 Q100,78 96,60 Z")}
+    ${region("core","M50,88 Q70,96 90,88 L88,120 Q70,126 52,120 Z")}
+    ${region("cuadriceps","M52,124 Q68,130 66,160 L54,158 Q50,140 52,124 Z")}
+    ${region("cuadriceps","M88,124 Q72,130 74,160 L86,158 Q90,140 88,124 Z")}
+    ${region("gemelo","M54,162 L64,162 L62,196 L56,196 Z")}
+    ${region("gemelo","M86,162 L76,162 L78,196 L84,196 Z")}
+    <text x="70" y="212" text-anchor="middle" font-size="9" fill="${css('--suave')}">frontal (esquemático)</text>
+  </svg>
+  <svg viewBox="0 0 140 220" style="width:100%;max-width:180px;display:block;margin:8px auto">
+    <ellipse cx="70" cy="18" rx="14" ry="16" fill="${css('--contorno')}"/>
+    ${region("hombro_posterior","M40,42 Q70,32 100,42 L96,58 Q70,48 44,58 Z")}
+    ${region("espalda_alta","M46,58 Q70,50 94,58 L92,86 Q70,94 48,86 Z")}
+    ${region("triceps","M32,60 Q26,80 30,100 L42,98 Q40,78 44,60 Z")}
+    ${region("triceps","M108,60 Q114,80 110,100 L98,98 Q100,78 96,60 Z")}
+    ${region("espalda_baja","M50,88 Q70,96 90,88 L88,112 Q70,118 52,112 Z")}
+    ${region("gluteo","M50,114 Q70,122 90,114 L88,132 Q70,138 52,132 Z")}
+    ${region("isquiotibial","M52,134 Q68,140 66,160 L54,158 Q50,146 52,134 Z")}
+    ${region("isquiotibial","M88,134 Q72,140 74,160 L86,158 Q90,146 88,134 Z")}
+    ${region("gemelo","M54,162 L64,162 L62,196 L56,196 Z")}
+    ${region("gemelo","M86,162 L76,162 L78,196 L84,196 Z")}
+    <text x="70" y="212" text-anchor="middle" font-size="9" fill="${css('--suave')}">posterior (esquemático)</text>
+  </svg>`;
+}
+
 let filaSeq = 0;
 function filaAct(a, gearLabel){
   const uid = `f${filaSeq++}_${a.id}`;
@@ -420,7 +451,7 @@ function pintarCiclismo(){
   if (GEARR){
     const usados = [...new Set(todas.map(gearFisico))];
     $("bici-gear").innerHTML = ["todos",...usados].map(g=>
-      `<button class="btn disp fgear ${g===filtroGear?"act":""}" data-g="${g}">${g==="todos"?"gear: todos":"🚲 "+(GEARR.gears[g]||g)}</button>`).join("");
+      `<button class="btn disp fgear ${g===filtroGear?"act":""}" data-g="${g}">${g==="todos"?"gear: todos":"🚲 "+(g==="other"?"Otro":g)}</button>`).join("");
   }
   $("bici-lista").innerHTML = sel.slice(0,30).map(a=>{
     const g = gearEtiqueta(a);
@@ -649,9 +680,54 @@ const detalleCache = {};
 const mapasAbiertos = {};
 function idxDescriptor(descs, key){ const d = descs.find(x=>x.key===key); return d ? d.metricsIndex : -1; }
 
+function ejerciciosGuardados(id){
+  try{ return JSON.parse(localStorage.getItem(`ejercicios_${id}`)||"[]"); }catch(e){ return []; }
+}
+function guardarEjercicio(id, ej){
+  const l = ejerciciosGuardados(id); l.push(ej);
+  localStorage.setItem(`ejercicios_${id}`, JSON.stringify(l));
+}
+
+function seccionFuerza(id, meta){
+  const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, series:e.series, reps:e.reps, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
+  const manuales = ejerciciosGuardados(id).map(e=>({...e, origen:"manual"}));
+  const todos = [...deGarmin, ...manuales];
+  const musculos = new Set();
+  todos.forEach(e=> (MUSCULOS[e.categoria]||[]).forEach(m=>musculos.add(m)));
+
+  const opciones = Object.keys(CATEGORIA_NOMBRE).map(c=>`<option value="${c}">${CATEGORIA_NOMBRE[c]}</option>`).join("");
+  let html = `<section class="tarjeta"><h2 class="disp">Ejercicios</h2>`;
+  if (todos.length){
+    html += `<div style="font-size:13px">` + todos.map(e=>{
+      const nombre = CATEGORIA_NOMBRE[e.categoria] || e.categoria || "Ejercicio";
+      const partes = [e.series?`${e.series} serie${e.series>1?"s":""}`:null, e.reps?`${e.reps} reps`:null, e.peso?`${e.peso} kg`:null].filter(Boolean).join(" · ");
+      return `<div class="fila">${nombre}${partes?" — "+partes:""} <span class="sub">(${e.origen})</span></div>`;
+    }).join("") + `</div>`;
+  } else {
+    html += `<p class="sub">Sin ejercicios registrados todavía.</p>`;
+  }
+  html += `
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--borde)">
+      <p class="disp sub" style="font-size:11px;margin:0 0 6px">Añadir ejercicio</p>
+      <select id="nuevo-cat-${id}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--borde);background:var(--fondo);color:var(--tinta);font-size:13px">${opciones}</select>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input id="nuevo-series-${id}" type="number" placeholder="series" style="flex:1">
+        <input id="nuevo-reps-${id}" type="number" placeholder="reps" style="flex:1">
+        <input id="nuevo-peso-${id}" type="number" step="0.5" placeholder="kg" style="flex:1">
+      </div>
+      <button class="boton disp" style="margin-top:8px" data-addej="${id}">+ Añadir</button>
+    </div>
+  </section>`;
+  if (musculos.size) html += `<section class="tarjeta"><h2 class="disp">Músculos trabajados</h2>${diagramaCuerpo(musculos)}
+    <p class="sub" style="text-align:center">${[...musculos].map(m=>MUSCULOS_NOMBRE[m]||m).join(" · ")}</p></section>`;
+  return html;
+}
+
 function construirHTMLDetalle(d, meta){
   let html = "";
   if (meta) html += `<p class="sub" style="margin:10px 0 0">${(meta.start_local||"").slice(0,10)} · ${[km(meta.distance_m),dur(meta.duration_s),meta.avg_hr?`FC media ${Math.round(meta.avg_hr)}`:null,meta.max_hr?`FC máx ${Math.round(meta.max_hr)}`:null,meta.elev_gain_m?`+${Math.round(meta.elev_gain_m)} m`:null,meta.calories?`${Math.round(meta.calories)} kcal`:null].filter(Boolean).join(" · ")}</p>`;
+
+  if ((meta.type||"").includes("strength")) html += seccionFuerza(meta.id, meta);
 
   const det = d.details || {};
   const poly = det.geoPolylineDTO && det.geoPolylineDTO.polyline;
@@ -664,9 +740,10 @@ function construirHTMLDetalle(d, meta){
     const paso = Math.max(1, Math.floor(pts.length/150));
     const muestra = pts.filter((_,i)=>i%paso===0).map(p=>p.metrics);
     const dist = muestra.map(m=> iDist>=0 ? Math.round((m[iDist]/1000)*100)/100 : null);
-    if (iSpeed>=0) html += `<section class="tarjeta"><h2 class="disp">Velocidad</h2><canvas id="cVel-${d._uid}" height="120"></canvas></section>`;
-    if (iElev>=0) html += `<section class="tarjeta"><h2 class="disp">Altitud</h2><canvas id="cElev-${d._uid}" height="120"></canvas></section>`;
-    if (iHr>=0) html += `<section class="tarjeta"><h2 class="disp">FC durante la actividad</h2><canvas id="cHrAct-${d._uid}" height="120"></canvas></section>`;
+    const hayDatos = (idx)=> idx>=0 && muestra.some(m=>m[idx]!=null);
+    if (hayDatos(iSpeed)) html += `<section class="tarjeta"><h2 class="disp">Velocidad</h2><canvas id="cVel-${d._uid}" height="120"></canvas></section>`;
+    if (hayDatos(iElev)) html += `<section class="tarjeta"><h2 class="disp">Altitud</h2><canvas id="cElev-${d._uid}" height="120"></canvas></section>`;
+    if (hayDatos(iHr)) html += `<section class="tarjeta"><h2 class="disp">FC durante la actividad</h2><canvas id="cHrAct-${d._uid}" height="120"></canvas></section>`;
   }
 
   const splits = d.split_summaries || d.splits;
@@ -782,6 +859,21 @@ document.addEventListener("click",(e)=>{
     const id = fila.dataset.actid, uid = fila.dataset.uid;
     const meta = (DATOS.activities||[]).find(a=>String(a.id)===String(id));
     toggleActividad(uid, id, meta);
+  }
+  const addej = e.target.closest("[data-addej]");
+  if (addej){
+    const id = addej.dataset.addej;
+    const cat = document.getElementById(`nuevo-cat-${id}`).value;
+    const series = +document.getElementById(`nuevo-series-${id}`).value || null;
+    const reps = +document.getElementById(`nuevo-reps-${id}`).value || null;
+    const peso = +document.getElementById(`nuevo-peso-${id}`).value || null;
+    guardarEjercicio(id, { categoria: cat, series, reps, peso });
+    const meta = (DATOS.activities||[]).find(a=>String(a.id)===String(id));
+    const cont = addej.closest(".expandible");
+    if (cont && detalleCache[id]){
+      cont.innerHTML = construirHTMLDetalle(detalleCache[id], meta);
+      requestAnimationFrame(()=>dibujarGraficasDetalle(detalleCache[id]));
+    }
   }
   const card = e.target.closest(".met[data-def]");
   if (card && DEFS[card.dataset.def]){
