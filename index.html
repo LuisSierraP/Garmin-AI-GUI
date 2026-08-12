@@ -97,6 +97,11 @@ canvas{max-width:100%}
         <div id="factores"></div>
       </section>
 
+      <section class="tarjeta" id="training-status-card" style="display:none">
+        <h2 class="disp">Estado de entrenamiento</h2>
+        <p id="training-status-txt" style="font-size:14px;margin:0"></p>
+      </section>
+
       <section class="tarjeta" id="mas-dia-card" style="display:none">
         <h2 class="disp">Más del día</h2>
         <div id="mas-dia" class="grid3"></div>
@@ -138,6 +143,7 @@ canvas{max-width:100%}
 
     <!-- ══════════ TAB CICLISMO ══════════ -->
     <div id="tab-ciclismo" class="oculto">
+      <div class="grid2" id="bici-rendimiento"></div>
       <section class="tarjeta">
         <h2 class="disp">Km recorridos</h2>
         <div class="grid3" id="bici-kms"></div>
@@ -151,6 +157,7 @@ canvas{max-width:100%}
 
     <!-- ══════════ TAB RUNNING ══════════ -->
     <div id="tab-running" class="oculto">
+      <div class="grid2" id="run-rendimiento"></div>
       <section class="tarjeta"><h2 class="disp">Km recorridos</h2><div class="grid3" id="run-kms"></div></section>
       <section class="tarjeta"><h2 class="disp">Progresión de ritmo</h2><canvas id="cRunRitmo" height="150"></canvas></section>
       <section class="tarjeta"><h2 class="disp">Carreras</h2><div id="run-lista"></div></section>
@@ -219,12 +226,18 @@ const DEFS = {
   edad: ["Edad", "Calculada desde tu fecha de nacimiento en el perfil de Garmin."],
   vo2: ["VO2 máx (running)", "Volumen máximo de oxígeno que tu cuerpo puede usar corriendo. Cuanto más alto, mejor tu capacidad aeróbica. Estimado por Garmin a partir de tus carreras."],
   umbral: ["Umbral de lactato", "La FC a partir de la cual tu cuerpo acumula lactato más rápido de lo que puede eliminarlo. Marca el límite entre esfuerzo sostenible y no sostenible; útil para definir zonas de entrenamiento."],
+  vo2bici: ["VO2 máx ciclismo", "Volumen máximo de oxígeno en bici. Complementa tu VO2 de running -- suelen diferir porque implican grupos musculares distintos."],
+  ftp: ["FTP", "Potencia máxima que puedes sostener durante ~1 hora. Referencia estándar para definir zonas de entrenamiento en bici con potenciómetro."],
+  hill: ["Hill Score", "Estimación de tu capacidad para subir pendientes, combinando fuerza y resistencia en terreno inclinado."],
+  endurance: ["Endurance Score", "Estimación de tu capacidad de resistencia aeróbica general, más allá de una sola sesión."],
+  vo2run: ["VO2 máx running", "Volumen máximo de oxígeno corriendo. Cuanto más alto, mejor tu capacidad aeróbica."],
+  fitage: ["Edad de fitness", "Tu edad biológica estimada según tu forma física, comparada con tu edad real."],
 };
 
 const $ = (id) => document.getElementById(id);
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
-let DATOS=null, CONFIG=null, GEARR=null, BODY=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
+let DATOS=null, CONFIG=null, GEARR=null, BODY=null, OBJETIVOS_REPO=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
 const TODAS_TABS = ["general","ciclismo","running","varias","salud"];
 const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
 
@@ -249,6 +262,13 @@ async function cargarBody(pat){
       { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
     BODY = r.ok ? await r.json() : null;
   }catch(e){ BODY = null; }
+}
+async function cargarObjetivosRepo(pat){
+  try{
+    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/app/salud-objetivos.json`,
+      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    return r.ok ? await r.json() : null;
+  }catch(e){ return null; }
 }
 function gearFisico(a){ // id para FILTRAR: el nombre real de Garmin, o "other" si no esta definido
   return a.gear_garmin || "other";
@@ -293,6 +313,7 @@ async function cargar(pat){
   await cargarConfig(pat);
   await cargarGear(pat);
   await cargarBody(pat);
+  OBJETIVOS_REPO = await cargarObjetivosRepo(pat);
   renderTabs();
   pintar();
   pantalla("panel");
@@ -440,6 +461,42 @@ function filaAct(a, gearLabel){
   </div>`;
 }
 
+function pintarRendimiento(){
+  const p = DATOS.performance;
+  if (!p){ $("bici-rendimiento").innerHTML=""; $("run-rendimiento").innerHTML=""; $("training-status-card").style.display="none"; return; }
+
+  const mm = p.max_metrics && (Array.isArray(p.max_metrics)?p.max_metrics[0]:p.max_metrics);
+  const vo2run = mm && (mm.vo2MaxPreciseValue ?? mm.vo2MaxValue);
+  const vo2bike = mm && mm.cycling && (mm.cycling.vo2MaxPreciseValue ?? mm.cycling.vo2MaxValue);
+  const fitAge = mm && mm.fitnessAge;
+
+  const bici = [];
+  if (vo2bike!=null) bici.push(["vo2bici","VO2 máx ciclismo",vo2bike,"ml/kg/min",css('--hrv')]);
+  if (p.ftp) bici.push(["ftp","FTP",p.ftp.ftpValue ?? p.ftp,"W",css('--alba')]);
+  if (p.hill_score && p.hill_score.overallScore!=null) bici.push(["hill","Hill Score",p.hill_score.overallScore,"/100",css('--sueno')]);
+  if (p.endurance_score && p.endurance_score.overallScore!=null) bici.push(["endurance","Endurance Score",p.endurance_score.overallScore,"/100",css('--bateria')]);
+  $("bici-rendimiento").innerHTML = bici.map(([def,et,v,u,c])=>
+    `<div class="met" data-def="${def}"><div class="disp et">${et}</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:${c}">${v}</span><span class="u">${u}</span></div></div>`).join("");
+
+  const run = [];
+  if (vo2run!=null) run.push(["vo2run","VO2 máx running",vo2run,"ml/kg/min",css('--hrv')]);
+  if (fitAge!=null) run.push(["fitage","Edad de fitness",fitAge,"años",css('--suave')]);
+  const preds = p.race_predictions;
+  if (preds){
+    const mapa = {predicted5K:"5K",predicted10K:"10K",predictedHalfMarathon:"21K",predictedMarathon:"42K"};
+    Object.entries(mapa).forEach(([k,label])=>{ if (preds[k]) run.push([`pred${k}`,`Predicción ${label}`, dur(preds[k]), "", css('--fc')]); });
+  }
+  $("run-rendimiento").innerHTML = run.map(([def,et,v,u,c])=>
+    `<div class="met" data-def="${def}"><div class="disp et">${et}</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:${c}">${v}</span><span class="u">${u}</span></div></div>`).join("");
+
+  const ts = p.training_status && (Array.isArray(p.training_status)?p.training_status[0]:p.training_status);
+  const estado = ts && (ts.trainingStatus || ts.trainingStatusFeedbackPhrase);
+  if (estado){
+    $("training-status-card").style.display = "";
+    $("training-status-txt").textContent = String(estado).replaceAll("_"," ").toLowerCase();
+  } else { $("training-status-card").style.display = "none"; }
+}
+
 function pintarCiclismo(){
   const todas = (DATOS.activities||[]).filter(a=>esBici(a.type));
   const tipos = [...new Set(todas.map(a=>a.type))];
@@ -521,12 +578,13 @@ function pintarSalud(){
       options: baseOpts("kg") });
   } else { $("salud-peso-card").style.display = "none"; }
 
-  try{
-    const o = JSON.parse(localStorage.getItem("salud_objetivos")||"{}");
-    if (o.peso) $("obj-peso").value = o.peso;
-    if (o.medidas) $("obj-medidas").value = o.medidas;
-    if (o.peso || o.medidas) $("obj-estado").textContent = `Objetivos guardados: ${[o.peso?o.peso+" kg":null, o.medidas].filter(Boolean).join(" · ")}`;
-  }catch(e){}
+  const o = OBJETIVOS_REPO || (()=>{ try{ return JSON.parse(localStorage.getItem("salud_objetivos")||"{}"); }catch(e){ return {}; } })();
+  if (o.peso_objetivo || o.peso) $("obj-peso").value = o.peso_objetivo || o.peso;
+  if (o.medidas_objetivo || o.medidas) $("obj-medidas").value = o.medidas_objetivo || o.medidas;
+  if (o.peso_objetivo || o.peso || o.medidas_objetivo || o.medidas){
+    const fuente = OBJETIVOS_REPO ? "guardado en tu repo" : "guardado solo en este navegador";
+    $("obj-estado").textContent = `Objetivos: ${[  (o.peso_objetivo||o.peso)?(o.peso_objetivo||o.peso)+" kg":null, o.medidas_objetivo||o.medidas].filter(Boolean).join(" · ")} (${fuente})`;
+  }
 }
 
 function rango(vals){
@@ -607,6 +665,7 @@ function pintar(){
 
   pintarTrend(30);
   pintarSueno(7);
+  pintarRendimiento();
 
   const bb = wAll.slice(-14);
   if (chartBB) chartBB.destroy();
@@ -843,7 +902,7 @@ $("fallo-llave").addEventListener("click", ()=>{ localStorage.removeItem(KEY); p
 $("obj-guardar").addEventListener("click", ()=>{
   const o = { peso: $("obj-peso").value.trim(), medidas: $("obj-medidas").value.trim() };
   localStorage.setItem("salud_objetivos", JSON.stringify(o));
-  $("obj-estado").textContent = "Objetivos guardados ✓";
+  $("obj-estado").textContent = "Guardado en este navegador ✓ — para que se vea igual en todos tus dispositivos, pídeselo a Claude en el chat.";
 });
 document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }
