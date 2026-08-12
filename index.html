@@ -197,10 +197,7 @@ canvas{max-width:100%}
           <div class="nota-tecnica"><span class="ic">ℹ️</span><span>La ectomorfia solo necesita altura y peso — ya los tenemos de tu perfil de Garmin. Endomorfia y mesomorfia requieren un calibrador de pliegues cutáneos: si no lo tienes, esos dos quedan pendientes en vez de adivinarse.</span></div>
 
           <p class="disp sub" style="font-size:11px;margin:10px 0 4px">Siempre disponibles (de tu perfil Garmin)</p>
-          <div class="grid2">
-            <div class="met" style="cursor:default"><div class="disp et">Altura</div><div class="mono v" id="bt-altura-v">—</div><div class="n">cm</div></div>
-            <div class="met" style="cursor:default"><div class="disp et">Peso</div><div class="mono v" id="bt-peso-v">—</div><div class="n">kg</div></div>
-          </div>
+          <div class="grid2" id="bt-base"></div>
 
           <p class="disp sub" style="font-size:11px;margin:14px 0 4px;cursor:pointer;text-decoration:underline dotted" data-def="pliegues">Pliegues cutáneos (mm) — calibrador ℹ️</p>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -286,6 +283,14 @@ const DEFS = {
 };
 
 const $ = (id) => document.getElementById(id);
+// Unico punto que construye peticiones a la API de GitHub -- URL y cabeceras
+// de autenticacion en un solo sitio. Anadir un endpoint nuevo no repite nada.
+function fetchRepo(pathAfterRepo, { pat, raw = true, method = "GET", jsonBody = null } = {}){
+  const headers = { Authorization: `Bearer ${pat}`, Accept: raw ? "application/vnd.github.raw+json" : "application/vnd.github+json" };
+  const opts = { method, headers, cache: "no-store" };
+  if (jsonBody){ headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(jsonBody); }
+  return fetch(`https://api.github.com/repos/${REPO}/${pathAfterRepo}`, opts);
+}
 // Dos categorias de aviso, con nombre propio para poder pedir luego "esconde los nota-tecnica"
 // o "esconde los nota-version" y localizarlos todos de una.
 const notaTecnica = (txt) => `<div class="nota-tecnica"><span class="ic">ℹ️</span><span>${txt}</span></div>`;
@@ -298,30 +303,26 @@ const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclis
 
 async function cargarConfig(pat){
   try{
-    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/app/config.json`,
-      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    const r = await fetchRepo('contents/app/config.json', { pat });
     CONFIG = r.ok ? await r.json() : CONFIG_DEFECTO;
   }catch(e){ CONFIG = CONFIG_DEFECTO; }
 }
 
 async function cargarGear(pat){
   try{
-    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/app/gear-reglas.json`,
-      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    const r = await fetchRepo('contents/app/gear-reglas.json', { pat });
     GEARR = r.ok ? await r.json() : null;
   }catch(e){ GEARR = null; }
 }
 async function cargarBody(pat){
   try{
-    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/body.json`,
-      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    const r = await fetchRepo('contents/garmin/body.json', { pat });
     BODY = r.ok ? await r.json() : null;
   }catch(e){ BODY = null; }
 }
 async function cargarObjetivosRepo(pat){
   try{
-    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/app/salud-objetivos.json`,
-      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" }, cache:"no-store" });
+    const r = await fetchRepo('contents/app/salud-objetivos.json', { pat });
     return r.ok ? await r.json() : null;
   }catch(e){ return null; }
 }
@@ -356,8 +357,7 @@ async function cargar(pat){
   pantalla("cargando");
   let r;
   try {
-    r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/summary.json`, {
-      headers: { Authorization: `Bearer ${pat}`, Accept: "application/vnd.github.raw+json" } });
+    r = await fetchRepo('contents/garmin/summary.json', { pat });
   } catch(e) {
     $("fallo-msj").textContent = "No pude conectar con GitHub. Comprueba tu conexión y recarga."; pantalla("fallo"); return;
   }
@@ -404,12 +404,18 @@ function dialSVG(valor){
     <text x="${cx}" y="${cy-4}" text-anchor="middle" fill="${css('--suave')}" style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif">preparación</text></svg>`;
 }
 
+// UNICO generador de "tarjeta de metrica" en toda la app -- todo lo que se vea
+// como una tarjetita con numero pasa por aqui. Cambiar el diseno se hace una
+// vez, aqui, y se aplica a las 6 secciones que las usan.
 function metrica(defKey, et, v, u, n, color){
-  return `<div class="met" data-def="${defKey}"><div class="disp et">${et}</div>
+  const clic = defKey ? ` data-def="${defKey}"` : ' style="cursor:default"';
+  return `<div class="met"${clic}><div class="disp et">${et}</div>
     <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
-      <span class="mono v" style="color:${color}">${v ?? "—"}</span><span class="u">${u}</span></div>
+      <span class="mono v" style="color:${color||"inherit"}">${v ?? "—"}</span><span class="u">${u||""}</span></div>
     <div class="n">${n||""}</div></div>`;
 }
+// Pinta una rejilla de metricas desde una lista de tuplas [defKey, etiqueta, valor, unidad, nota, color]
+const rejillaMetricas = (tuplas) => tuplas.map(([d,e,v,u,n,c])=>metrica(d,e,v,u,n,c)).join("");
 
 const baseOpts = (unidad) => ({
   responsive:true,
@@ -452,10 +458,8 @@ function sumKm(acts, dias){
     .reduce((s,a)=>s+(a.distance_m||0),0)/100)/10;
 }
 function kmsHTML(acts){
-  return [["semana",7],["mes",30],["año",365]].map(([n,d])=>
-    `<div class="met" style="cursor:default"><div class="disp et">${n}</div>
-     <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px">
-       <span class="mono v" style="color:${css('--alba')}">${sumKm(acts,d)}</span><span class="u">km</span></div></div>`).join("");
+  return rejillaMetricas([["semana",7],["mes",30],["año",365]]
+    .map(([label,dias])=>[null, label, sumKm(acts,dias), "km", "", css('--alba')]));
 }
 const MUSCULOS = {
   BENCH_PRESS:["pecho","triceps","hombro_frontal"], PUSH_UP:["pecho","triceps","hombro_frontal"],
@@ -526,23 +530,21 @@ function pintarRendimiento(){
   const fitAge = mm && mm.fitnessAge;
 
   const bici = [];
-  if (vo2bike!=null) bici.push(["vo2bici","VO2 máx ciclismo",vo2bike,"ml/kg/min",css('--hrv')]);
-  if (p.ftp) bici.push(["ftp","FTP",p.ftp.ftpValue ?? p.ftp,"W",css('--alba')]);
-  if (p.hill_score && p.hill_score.overallScore!=null) bici.push(["hill","Hill Score",p.hill_score.overallScore,"/100",css('--sueno')]);
-  if (p.endurance_score && p.endurance_score.overallScore!=null) bici.push(["endurance","Endurance Score",p.endurance_score.overallScore,"/100",css('--bateria')]);
-  $("bici-rendimiento").innerHTML = bici.map(([def,et,v,u,c])=>
-    `<div class="met" data-def="${def}"><div class="disp et">${et}</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:${c}">${v}</span><span class="u">${u}</span></div></div>`).join("");
+  if (vo2bike!=null) bici.push(["vo2bici","VO2 máx ciclismo",vo2bike,"ml/kg/min",null,css('--hrv')]);
+  if (p.ftp) bici.push(["ftp","FTP",p.ftp.ftpValue ?? p.ftp,"W",null,css('--alba')]);
+  if (p.hill_score && p.hill_score.overallScore!=null) bici.push(["hill","Hill Score",p.hill_score.overallScore,"/100",null,css('--sueno')]);
+  if (p.endurance_score && p.endurance_score.overallScore!=null) bici.push(["endurance","Endurance Score",p.endurance_score.overallScore,"/100",null,css('--bateria')]);
+  $("bici-rendimiento").innerHTML = rejillaMetricas(bici);
 
   const run = [];
-  if (vo2run!=null) run.push(["vo2run","VO2 máx running",vo2run,"ml/kg/min",css('--hrv')]);
-  if (fitAge!=null) run.push(["fitage","Edad de fitness",fitAge,"años",css('--suave')]);
+  if (vo2run!=null) run.push(["vo2run","VO2 máx running",vo2run,"ml/kg/min",null,css('--hrv')]);
+  if (fitAge!=null) run.push(["fitage","Edad de fitness",fitAge,"años",null,css('--suave')]);
   const preds = p.race_predictions;
   if (preds){
     const mapa = {predicted5K:"5K",predicted10K:"10K",predictedHalfMarathon:"21K",predictedMarathon:"42K"};
-    Object.entries(mapa).forEach(([k,label])=>{ if (preds[k]) run.push([`pred${k}`,`Predicción ${label}`, dur(preds[k]), "", css('--fc')]); });
+    Object.entries(mapa).forEach(([k,label])=>{ if (preds[k]) run.push([`pred${k}`,`Predicción ${label}`, dur(preds[k]), "", null, css('--fc')]); });
   }
-  $("run-rendimiento").innerHTML = run.map(([def,et,v,u,c])=>
-    `<div class="met" data-def="${def}"><div class="disp et">${et}</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:${c}">${v}</span><span class="u">${u}</span></div></div>`).join("");
+  $("run-rendimiento").innerHTML = rejillaMetricas(run);
 
   const ts = p.training_status && (Array.isArray(p.training_status)?p.training_status[0]:p.training_status);
   const estado = ts && (ts.trainingStatus || ts.trainingStatusFeedbackPhrase);
@@ -634,8 +636,10 @@ function pintarBodyType(){
   const wraw = BODY && BODY.weight_raw;
   const lista = wraw && wraw.dateWeightList ? [...wraw.dateWeightList].sort((a,b)=>a.calendarDate.localeCompare(b.calendarDate)) : [];
   const pesoKg = lista.length ? Math.round(lista[lista.length-1].weight/100)/10 : null;
-  $("bt-altura-v").textContent = alt ?? "—";
-  $("bt-peso-v").textContent = pesoKg ?? "—";
+  $("bt-base").innerHTML = rejillaMetricas([
+    [null, "Altura", alt ?? "—", "cm", "", css('--alba')],
+    [null, "Peso", pesoKg ?? "—", "kg", "", css('--alba')],
+  ]);
 
   try{
     const g = JSON.parse(localStorage.getItem("bodytype_medidas")||"{}");
@@ -672,11 +676,11 @@ $("bt-calcular").addEventListener("click", ()=>{
   localStorage.setItem("bodytype_medidas", JSON.stringify(m));
 
   const r = calcularSomatotipo(m);
-  let html = `<div class="grid3">
-    <div class="met" data-def="endo"><div class="disp et">Endomorfia</div><div class="mono v" style="color:${css('--bateria')}">${r.endo!=null?Math.round(r.endo*10)/10:"—"}</div><div class="n">${r.endo!=null?"toca para saber qué es":"necesita calibrador"}</div></div>
-    <div class="met" data-def="meso"><div class="disp et">Mesomorfia</div><div class="mono v" style="color:${css('--alba')}">${r.meso!=null?Math.round(r.meso*10)/10:"—"}</div><div class="n">${r.meso!=null?"toca para saber qué es":"necesita calibrador"}</div></div>
-    <div class="met" data-def="ecto"><div class="disp et">Ectomorfia</div><div class="mono v" style="color:${css('--hrv')}">${r.ecto}</div><div class="n">toca para saber qué es</div></div>
-  </div>`;
+  let html = `<div class="grid3">` + rejillaMetricas([
+    ["endo", "Endomorfia", r.endo!=null?Math.round(r.endo*10)/10:"—", "", r.endo!=null?"toca para saber qué es":"necesita calibrador", css('--bateria')],
+    ["meso", "Mesomorfia", r.meso!=null?Math.round(r.meso*10)/10:"—", "", r.meso!=null?"toca para saber qué es":"necesita calibrador", css('--alba')],
+    ["ecto", "Ectomorfia", r.ecto, "", "toca para saber qué es", css('--hrv')],
+  ]) + `</div>`;
   if (r.endo==null || r.meso==null){
     html += notaTecnica("Endomorfia y mesomorfia requieren el calibrador de pliegues cutáneos — no se inventan ni se estiman sin él. En cuanto consigas uno, vuelve a calcular con los mismos datos.");
   } else {
@@ -703,10 +707,7 @@ function pintarSalud(){
   if (ud && ud.vo2MaxRunning!=null) tarjetas.push(["vo2","VO2 máx running", ud.vo2MaxRunning, "ml/kg/min", "estimado por Garmin", css('--hrv')]);
   if (ud && ud.lactateThresholdHeartRate!=null) tarjetas.push(["umbral","Umbral de lactato", ud.lactateThresholdHeartRate, "ppm", "detectado automáticamente", css('--fc')]);
 
-  $("salud-metricas").innerHTML = tarjetas.map(([def,et,v,u,n,c])=>
-    `<div class="met" data-def="${def}"><div class="disp et">${et}</div>
-      <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v" style="color:${c}">${v}</span><span class="u">${u}</span></div>
-      <div class="n">${n}</div></div>`).join("");
+  $("salud-metricas").innerHTML = rejillaMetricas(tarjetas);
 
   if (lista.length>1){
     $("salud-peso-card").style.display = "";
@@ -798,8 +799,7 @@ function pintar(){
   if (hoy.stress_rest_pct!=null) masDia.push(["En calma", Math.round(hoy.stress_rest_pct)+"%", "del día"]);
   if (masDia.length){
     $("mas-dia-card").style.display = "";
-    $("mas-dia").innerHTML = masDia.map(([et,v,u])=>`<div class="met" style="cursor:default"><div class="disp et">${et}</div>
-      <div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span class="mono v">${v}</span><span class="u">${u}</span></div></div>`).join("");
+    $("mas-dia").innerHTML = rejillaMetricas(masDia.map(([et,v,u])=>[null,et,v,u,null,"inherit"]));
   } else { $("mas-dia-card").style.display = "none"; }
 
   pintarTrend(30);
@@ -835,8 +835,7 @@ function pintar(){
 function chip(txt, girando){ const c=$("chip"); c.textContent=txt||""; c.style.color = girando ? css('--alba') : css('--suave'); }
 async function shaSummary(pat){
   try{
-    const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/summary.json`,
-      { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github+json" }, cache:"no-store" });
+    const r = await fetchRepo('contents/garmin/summary.json', { pat, raw:false });
     if(!r.ok) return null;
     return (await r.json()).sha;
   }catch(e){ return null; }
@@ -859,9 +858,7 @@ async function syncNow(auto){
   if (!auto && Date.now()-last < 2*60*1000){ chip("Espera un par de minutos entre sincronizaciones"); return; }
   let r;
   try{
-    r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/garmin-sync.yml/dispatches`,
-      { method:"POST", headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github+json", "Content-Type":"application/json" },
-        body: JSON.stringify({ ref:"main" }) });
+    r = await fetchRepo('actions/workflows/garmin-sync.yml/dispatches', { pat, raw:false, method:"POST", jsonBody:{ ref:"main" } });
   }catch(e){ chip("Sin conexión para lanzar la sincronización"); return; }
   if (r.status===204){ localStorage.setItem("last_trigger", String(Date.now())); chip("Sincronizando con Garmin… (~2 min, se actualizará sola)", true); vigilar(); }
   else if (r.status===403 || r.status===404){ chip("Para sincronizar, tu llave necesita el permiso Actions: Read and write"); }
@@ -1020,8 +1017,7 @@ async function toggleActividad(uid, id, meta){
     cont.classList.add("abierto");
     const pat = localStorage.getItem(KEY);
     try{
-      const r = await fetch(`https://api.github.com/repos/${REPO}/contents/garmin/details/${id}.json`,
-        { headers:{ Authorization:`Bearer ${pat}`, Accept:"application/vnd.github.raw+json" } });
+      const r = await fetchRepo(`contents/garmin/details/${id}.json`, { pat });
       if (!r.ok){ cont.innerHTML = '<p class="sub" style="padding:10px 0">Aún no hay detalle guardado para esta actividad.</p>'; return; }
       const d = await r.json(); d._uid = uid;
       detalleCache[id] = d;
@@ -1051,7 +1047,7 @@ document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("fgear")){ filtroGear = e.target.dataset.g; pintarCiclismo(); }
   if (e.target.classList.contains("tabbtn")){
     document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("act")); e.target.classList.add("act");
-    ["general","ciclismo","running","varias","salud"].forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==e.target.dataset.tab));
+    TODAS_TABS.forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==e.target.dataset.tab));
   }
   const fila = e.target.closest(".fila[data-actid]");
   if (fila){
