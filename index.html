@@ -173,8 +173,13 @@ canvas{max-width:100%}
     <div id="tab-salud" class="oculto">
       <div class="grid2" id="salud-metricas"></div>
       <section class="tarjeta" id="salud-peso-card" style="display:none">
-        <h2 class="disp">Evolución del peso</h2>
-        <canvas id="cPeso" height="170"></canvas>
+        <div class="cab" style="cursor:pointer" id="peso-evol-toggle">
+          <h2 class="disp">Evolución del peso</h2>
+          <span class="btn disp" id="peso-evol-flecha">▾</span>
+        </div>
+        <div class="expandible" id="peso-evol-panel">
+          <canvas id="cPeso" height="170" style="margin-top:10px"></canvas>
+        </div>
       </section>
       <section class="tarjeta">
         <h2 class="disp">Tus objetivos</h2>
@@ -1175,6 +1180,17 @@ document.addEventListener("click",(e)=>{
     const [t,txt] = DEFS[card.dataset.def];
     $("def-titulo").textContent = t; $("def-texto").innerHTML = txt.replaceAll("\n","<br>");
     $("definicion").classList.remove("oculto");
+  }
+  // Tocar la tarjeta "Peso" tambien expande su grafica de evolucion
+  if (card && card.dataset.def === "peso"){
+    $("peso-evol-panel").classList.add("abierto");
+    $("peso-evol-flecha").textContent = "▴";
+    if (chartPeso) chartPeso.resize();
+  }
+  if (e.target.closest("#peso-evol-toggle")){
+    const abierto = $("peso-evol-panel").classList.toggle("abierto");
+    $("peso-evol-flecha").textContent = abierto ? "▴" : "▾";
+    if (abierto && chartPeso) chartPeso.resize();
   }
 });
 
