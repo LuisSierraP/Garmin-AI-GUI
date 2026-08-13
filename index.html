@@ -192,7 +192,15 @@ canvas{max-width:100%}
         <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Historial de objetivos</p>
         <div id="obj-historial"></div>
       </section>
-      <div class="nota-version"><span class="ic">🚧</span><span>v1 — los objetivos se guardan en este navegador; próximamente: peso y medidas reales desde Garmin y sistema de sugerencias</span></div>
+      <div class="nota-version"><span class="ic">🚧</span><span>v1 — objetivos ya se guardan en tu repositorio, con historial. Próximamente: comparación automática contra tus datos reales</span></div>
+
+      <section class="tarjeta">
+        <h2 class="disp">Consejo de alimentación</h2>
+        <p class="sub" style="margin:0 0 10px">Hábitos generales, no una dieta — a petición tuya, nunca automático.</p>
+        <button id="nutri-consejo-btn" class="boton disp">Dame un consejo</button>
+        <div id="nutri-consejo" style="margin-top:10px"></div>
+      </section>
+      <div class="nota-version"><span class="ic">🚧</span><span>v1 — principios generales de Carlos Jaramillo. Próximamente: más fuentes aprobadas, y contexto según tus datos del día</span></div>
 
       <section class="tarjeta">
         <div class="cab" style="cursor:pointer" id="bt-toggle">
@@ -667,6 +675,29 @@ function pintarBodyType(){
     ["endo","Endo"],["meso","Meso"],["ecto","Ecto"]
   ]);
 }
+
+// ── consejo de alimentacion: extensible por diseno -- lee app/principios-nutricion.json,
+// cualquier fuente nueva que Luis apruebe se agrega ahi, esto no cambia nunca.
+let PRINCIPIOS_NUTRICION = null, ultimoConsejoId = null;
+async function cargarPrincipiosNutricion(){
+  const pat = localStorage.getItem(KEY);
+  try{
+    const r = await fetchRepo('contents/app/principios-nutricion.json', { pat });
+    PRINCIPIOS_NUTRICION = r.ok ? await r.json() : null;
+  }catch(e){ PRINCIPIOS_NUTRICION = null; }
+}
+$("nutri-consejo-btn").addEventListener("click", async ()=>{
+  if (!PRINCIPIOS_NUTRICION) await cargarPrincipiosNutricion();
+  const lista = PRINCIPIOS_NUTRICION && PRINCIPIOS_NUTRICION.principios;
+  if (!lista || !lista.length){ $("nutri-consejo").innerHTML = notaTecnica("Sin principios cargados todavía."); return; }
+  let candidatos = lista.filter(p=>p.id!==ultimoConsejoId);
+  if (!candidatos.length) candidatos = lista;
+  const p = candidatos[Math.floor(Math.random()*candidatos.length)];
+  ultimoConsejoId = p.id;
+  const autor = (PRINCIPIOS_NUTRICION.fuentes||[]).find(f=>f.id===p.fuente);
+  $("nutri-consejo").innerHTML = `<p style="font-size:14px;margin:0 0 6px;line-height:1.5">${p.texto}</p>
+    <p class="sub" style="margin:0">— ${autor ? autor.autor : p.fuente}</p>`;
+});
 
 $("bt-toggle").addEventListener("click", ()=>{
   $("bt-panel").classList.toggle("abierto");
