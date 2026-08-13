@@ -200,6 +200,13 @@ canvas{max-width:100%}
         <p class="sub" style="margin:0 0 10px">Hábitos generales, no una dieta — a petición tuya, nunca automático.</p>
         <button id="nutri-consejo-btn" class="boton disp">Dame un consejo</button>
         <div id="nutri-consejo" style="margin-top:10px"></div>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--borde)">
+          <h2 class="disp" style="font-size:13px">Menú</h2>
+          <p class="sub" style="margin:0 0 10px">Sugerencia de menú — a petición tuya, igual que el consejo de arriba.</p>
+          <button id="nutri-menu-btn" class="boton disp">Sugerir menú</button>
+          <div id="nutri-menu" style="margin-top:10px"></div>
+        </div>
       </section>
       <div class="nota-version"><span class="ic">🚧</span><span>v1 — principios generales de Carlos Jaramillo. Próximamente: más fuentes aprobadas, y contexto según tus datos del día</span></div>
 
@@ -698,6 +705,26 @@ $("nutri-consejo-btn").addEventListener("click", async ()=>{
   const autor = (PRINCIPIOS_NUTRICION.fuentes||[]).find(f=>f.id===p.fuente);
   $("nutri-consejo").innerHTML = `<p style="font-size:14px;margin:0 0 6px;line-height:1.5">${p.texto}</p>
     <p class="sub" style="margin:0">— ${autor ? autor.autor : p.fuente}</p>`;
+});
+
+// ── menu sugerido: mismo patron que el consejo -- extensible, sin logica todavia
+// (Luis define la base mas adelante; app/menu-sugerencias.json se llena entonces).
+let MENU_SUGERENCIAS = null;
+$("nutri-menu-btn").addEventListener("click", async ()=>{
+  const pat = localStorage.getItem(KEY);
+  if (!MENU_SUGERENCIAS){
+    try{
+      const r = await fetchRepo('contents/app/menu-sugerencias.json', { pat });
+      MENU_SUGERENCIAS = r.ok ? await r.json() : { opciones: [] };
+    }catch(e){ MENU_SUGERENCIAS = { opciones: [] }; }
+  }
+  const opciones = MENU_SUGERENCIAS.opciones || [];
+  if (!opciones.length){
+    $("nutri-menu").innerHTML = notaTecnica("Todavía no hay una base definida para sugerir menús. En cuanto se defina, este botón empezará a sugerir solo, sin cambios de código.");
+    return;
+  }
+  const op = opciones[Math.floor(Math.random()*opciones.length)];
+  $("nutri-menu").innerHTML = `<p style="font-size:14px;margin:0;line-height:1.5">${op.texto || JSON.stringify(op)}</p>`;
 });
 
 $("bt-toggle").addEventListener("click", ()=>{
