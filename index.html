@@ -91,19 +91,28 @@ canvas{max-width:100%}
 
     <!-- ══════════ TAB GENERAL ══════════ -->
     <div id="tab-general">
+      <section class="tarjeta">
+        <h2 class="disp">Anoche</h2>
+        <p id="resumen-sueno" style="font-size:14px;margin:0;line-height:1.5"></p>
+        <button id="sugerencia-dia-btn" class="boton disp" style="margin-top:10px">Sugerencia del día</button>
+        <div id="sugerencia-dia" style="margin-top:10px"></div>
+      </section>
+
       <section class="tarjeta" style="border-radius:18px;padding:20px 16px 14px">
         <div id="dial"></div>
         <p id="veredicto" style="text-align:center;font-size:14px;margin:10px 0 0"></p>
       </section>
 
       <section class="tarjeta" id="factores-card" style="display:none">
-        <h2 class="disp">Por qué tu preparación es la que es</h2>
+        <div class="cab"><h2 class="disp">Por qué tu preparación es la que es</h2></div>
         <div id="factores"></div>
+        <p id="factores-analisis" class="sub" style="margin-top:8px;cursor:pointer;text-decoration:underline dotted"></p>
       </section>
 
       <section class="tarjeta" id="training-status-card" style="display:none">
         <h2 class="disp">Estado de entrenamiento</h2>
         <p id="training-status-txt" style="font-size:14px;margin:0"></p>
+        <p id="training-status-analisis" class="sub" style="margin-top:6px"></p>
       </section>
 
       <section class="tarjeta" id="mas-dia-card" style="display:none">
@@ -123,6 +132,7 @@ canvas{max-width:100%}
           </div>
         </div>
         <canvas id="cTrend" height="210"></canvas>
+        <p id="trend-analisis" class="sub" style="margin-top:8px"></p>
       </section>
 
       <section class="tarjeta">
@@ -400,6 +410,46 @@ async function cargar(pat){
   autoSync();
 }
 
+// ── analisis cortos por regla: sin API, sin coste, siempre disponibles ──
+function resumenSueno(hoy){
+  const h = horas(hoy.sleep_seconds);
+  if (h==null) return "Sin datos de sueño de anoche todavía.";
+  const score = hoy.sleep_score;
+  const calidad = score>=80?"muy bien":score>=60?"bien":score>=40?"regular":"mal";
+  const energia = hoy.training_readiness>=70 ? "Hoy tu cuerpo debería responder bien a la intensidad."
+    : hoy.training_readiness>=40 ? "Hoy conviene ir con cabeza: ni forzar ni quedarte parado."
+    : hoy.training_readiness!=null ? "Hoy tu cuerpo pide recuperación, no rendimiento." : "";
+  return `Dormiste ${h} h, ${calidad}${score!=null?` (puntuación ${score})`:""}. ${energia}`;
+}
+function analizarFactores(factores){
+  if (!factores.length) return "";
+  const peor = factores.reduce((a,b)=> b[1]<a[1]?b:a);
+  if (peor[1]>=80) return "Todo en verde — nada te frena hoy.";
+  const mejor = factores.reduce((a,b)=> b[1]>a[1]?b:a);
+  return `Lo que más pesa: ${peor[0].toLowerCase()} (${peor[1]}%). Lo mejor: ${mejor[0].toLowerCase()}.`;
+}
+const TRAINING_STATUS_CORTO = {
+  PRODUCTIVE: "Tu entrenamiento está dando frutos — sigue así.",
+  PEAKING: "Estás en tu punto álgido — buen momento para exigirte.",
+  MAINTAINING: "Mantienes el nivel, sin grandes cambios.",
+  RECOVERY: "Tu cuerpo se está recuperando — normal tras esfuerzo reciente.",
+  UNPRODUCTIVE: "Entrenas pero no progresas — revisa carga y descanso.",
+  OVERREACHING: "Vas cargado — vigila el descanso los próximos días.",
+  DETRAINING: "Perdiendo forma por poco entrenamiento reciente.",
+  STRAINED: "Estrés de entrenamiento alto — prioriza recuperar.",
+  NO_STATUS: "Aún sin datos suficientes para determinarlo.",
+};
+function analizarTrainingStatus(estadoCrudo){
+  const base = String(estadoCrudo||"").toUpperCase().replace(/_\d+$/,"");
+  return TRAINING_STATUS_CORTO[base] || "";
+}
+function analizarTendencia(hoy, rHrv, rFcr){
+  const partes = [];
+  if (rHrv && hoy.hrv_ms!=null) partes.push(hoy.hrv_ms>=rHrv.min ? "HRV dentro de lo normal" : "HRV más baja de lo habitual");
+  if (rFcr && hoy.resting_hr!=null) partes.push(hoy.resting_hr<=rFcr.max ? "FC en reposo normal" : "FC en reposo más alta de lo habitual");
+  return partes.length ? partes.join(". ") + "." : "";
+}
+
 function veredicto(hoy, mHrv7){
   const r = hoy.training_readiness, lvl = (hoy.training_readiness_level||"").toUpperCase(), s = horas(hoy.sleep_seconds);
   let base;
@@ -582,6 +632,7 @@ function pintarRendimiento(){
   if (estado){
     $("training-status-card").style.display = "";
     $("training-status-txt").textContent = String(estado).replaceAll("_"," ").toLowerCase();
+    $("training-status-analisis").textContent = analizarTrainingStatus(estado);
   } else { $("training-status-card").style.display = "none"; }
 }
 
@@ -727,6 +778,27 @@ $("nutri-menu-btn").addEventListener("click", async ()=>{
   $("nutri-menu").innerHTML = `<p style="font-size:14px;margin:0;line-height:1.5">${op.texto || JSON.stringify(op)}</p>`;
 });
 
+// ── sugerencia del dia: llamada REAL a Claude, no una regla fija -- una accion deliberada, nunca automatica.
+$("sugerencia-dia-btn").addEventListener("click", async ()=>{
+  const pat = localStorage.getItem(KEY);
+  $("sugerencia-dia").innerHTML = notaTecnica("Pidiéndole a Claude tu sugerencia… (unos segundos)");
+  const r = await dispararWorkflow("sugerencia-dia.yml", {}, pat);
+  if (!r){ $("sugerencia-dia").innerHTML = notaTecnica("Sin conexión para pedir la sugerencia."); return; }
+  if (r.status===204){
+    vigilarArchivo("garmin/sugerencia-dia.json", async ()=>{
+      const rr = await fetchRepo('contents/garmin/sugerencia-dia.json', { pat });
+      const d = rr.ok ? await rr.json() : null;
+      $("sugerencia-dia").innerHTML = d && d.texto
+        ? `<p style="font-size:14px;margin:0;line-height:1.5">${d.texto}</p>`
+        : notaTecnica("No pude leer la sugerencia.");
+    }, "Pidiéndole a Claude tu sugerencia…", "Sigue en marcha — vuelve a tocar el botón en un momento");
+  } else if (r.status===403 || r.status===404){
+    $("sugerencia-dia").innerHTML = notaTecnica("Tu llave necesita el permiso Actions: Read and write para pedir esto.");
+  } else {
+    $("sugerencia-dia").innerHTML = notaTecnica(`No pude pedir la sugerencia (${r.status}). Si el workflow no tiene configurada la llave de Anthropic, avísame en el chat.`);
+  }
+});
+
 $("bt-toggle").addEventListener("click", ()=>{
   $("bt-panel").classList.toggle("abierto");
   $("bt-flecha").textContent = $("bt-panel").classList.contains("abierto") ? "▴" : "▾";
@@ -848,8 +920,10 @@ function pintar(){
   const rSueno = rango(w30.map(x=>horas(x.sleep_seconds)));
 
   $("fecha").textContent = `${fDia(hoy.day||"")} · sincronizado ${fSync(DATOS.last_sync)}`;
+  $("resumen-sueno").textContent = resumenSueno(hoy);
   $("dial").innerHTML = dialSVG(hoy.training_readiness);
   $("veredicto").textContent = veredicto(hoy, mHrv7);
+  $("trend-analisis").textContent = analizarTendencia(hoy, rHrv, rFcr);
 
   const FB = {VERY_GOOD:"excelente", GOOD:"bien", MODERATE:"regular", FAIR:"regular", POOR:"flojo", VERY_POOR:"muy flojo"};
   const factores = [
@@ -862,6 +936,7 @@ function pintar(){
   ].filter(f=>f[1]!=null);
   if (factores.length){
     $("factores-card").style.display = "";
+    $("factores-analisis").textContent = analizarFactores(factores);
     $("factores").innerHTML = factores.map(([n,p,fb])=>{
       const color = p>=80 ? css('--bateria') : p>=50 ? css('--alba') : css('--fc');
       return `<div style="margin:8px 0">
