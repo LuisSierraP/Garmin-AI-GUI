@@ -582,7 +582,7 @@ function pintarSueno(n){
   const w = (n===7 && suenoSemanaAncla) ? diasDeSemanaAncla(suenoSemanaAncla) : [...DATOS.wellness].slice(-n);
   if (chartSueno) chartSueno.destroy();
   const tipViejo = document.getElementById("sueno-tooltip-html");
-  if (tipViejo) tipViejo.style.opacity = 0;
+  if (tipViejo){ tipViejo.style.opacity = 0; tipViejo.style.pointerEvents = "none"; }
 
   if (n===1){
     $("sueno-dia-nav").style.display = "flex";
@@ -637,11 +637,12 @@ function tooltipSuenoHTML(context, w){
   if (!el){
     el = document.createElement("div");
     el.id = "sueno-tooltip-html";
-    el.style.cssText = `position:absolute;pointer-events:auto;cursor:pointer;background:${css('--tarjeta')};border:1px solid ${css('--alba')};border-radius:10px;padding:8px 10px;font-size:12px;color:${css('--tinta')};line-height:1.5;z-index:20;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:opacity .1s`;
+    el.style.cssText = `position:absolute;pointer-events:none;opacity:0;cursor:pointer;background:${css('--tarjeta')};border:1px solid ${css('--alba')};border-radius:10px;padding:8px 10px;font-size:12px;color:${css('--tinta')};line-height:1.5;z-index:20;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:opacity .1s`;
     el.addEventListener("click", ()=>{
       if (tooltipDiaIdx==null) return;
       suenoDiaOffset = tooltipDiaIdx - (DATOS.wellness.length - 1);
       el.style.opacity = 0;
+      el.style.pointerEvents = "none";
       document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
       document.querySelector('.rangoS[data-n="1"]').classList.add("act");
       pintarSueno(1);
@@ -652,11 +653,12 @@ function tooltipSuenoHTML(context, w){
   const tooltip = context.tooltip;
   if (tooltip.opacity===0 || !tooltip.dataPoints || !tooltip.dataPoints.length){
     el.style.opacity = 0;
+    el.style.pointerEvents = "none";
     return;
   }
   const idxEnW = tooltip.dataPoints[0].dataIndex;
   const diaObj = w[idxEnW];
-  if (!diaObj){ el.style.opacity = 0; return; }
+  if (!diaObj){ el.style.opacity = 0; el.style.pointerEvents = "none"; return; }
   tooltipDiaIdx = DATOS.wellness.indexOf(diaObj);
   const partes = [];
   if (diaObj.sleep_deep_s!=null) partes.push(`Profundo: ${horas(diaObj.sleep_deep_s)} h`);
@@ -665,6 +667,7 @@ function tooltipSuenoHTML(context, w){
   const total = horas(diaObj.sleep_seconds);
   el.innerHTML = `<b>${fDia(diaObj.day)}</b><br>${partes.join("<br>")||"Sin desglose"}${total!=null?`<br>Total: ${total} h`:""}<br><span style="color:${css('--suave')};font-size:10px">toca aquí para ver el detalle</span>`;
   el.style.opacity = 1;
+  el.style.pointerEvents = "auto";
   el.style.left = context.chart.canvas.offsetLeft + tooltip.caretX + "px";
   el.style.top = context.chart.canvas.offsetTop + tooltip.caretY + "px";
 }
