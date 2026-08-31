@@ -561,7 +561,6 @@ const parseUTC = (s) => new Date(s + "Z"); // Garmin manda hora UTC sin sufijo; 
 
 let suenoDiaOffset = 0; // 0 = dia mas reciente, -1 = anterior, etc.
 let suenoSemanaAncla = null; // null = semana mas reciente; si no, el Lunes (Date) de la semana a mostrar
-let resumenDiaPendiente = null; // indice real en DATOS.wellness esperando el segundo toque
 
 function lunesDe(fecha){
   const dia = (fecha.getDay()+6)%7;
@@ -577,7 +576,6 @@ function diasDeSemanaAncla(lunes){
 }
 function cerrarDefinicion(){
   $("definicion").classList.add("oculto");
-  resumenDiaPendiente = null;
 }
 
 function pintarSueno(n){
@@ -643,17 +641,11 @@ function pintarSueno(n){
           return;
         }
 
-        // Semana -> mensaje resumen del dia completo (no solo el segmento tocado)
-        resumenDiaPendiente = idxReal;
-        const partes = [];
-        if (diaObj.sleep_deep_s!=null) partes.push(`Profundo ${horas(diaObj.sleep_deep_s)} h`);
-        if (diaObj.sleep_light_s!=null) partes.push(`Ligero ${horas(diaObj.sleep_light_s)} h`);
-        if (diaObj.sleep_rem_s!=null) partes.push(`REM ${horas(diaObj.sleep_rem_s)} h`);
-        if (diaObj.sleep_awake_s!=null) partes.push(`Despierto ${horas(diaObj.sleep_awake_s)} h`);
-        const totalH = horas(diaObj.sleep_seconds);
-        $("def-titulo").textContent = fDia(diaObj.day);
-        $("def-texto").innerHTML = `Total: ${totalH!=null?totalH+" h":"—"}${diaObj.sleep_score!=null?` (puntuación ${diaObj.sleep_score})`:""}<br>${partes.join(" · ")||"Sin desglose por fases"}<br><br><span class="sub">Toca este mensaje para ver el detalle hora a hora</span>`;
-        $("definicion").classList.remove("oculto");
+        // Semana -> abre directamente el timeline de ese dia (la etiqueta rapida ya muestra el resumen)
+        suenoDiaOffset = idxReal - (DATOS.wellness.length - 1);
+        document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
+        document.querySelector('.rangoS[data-n="1"]').classList.add("act");
+        pintarSueno(1);
       },
       scales:{ x:{ ...baseOpts().scales.x, stacked:true, ticks:{...baseOpts().scales.x.ticks, maxTicksLimit: n>10?8:7} }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
 }
@@ -1652,19 +1644,9 @@ document.addEventListener("click",(e)=>{
   }
   const card = e.target.closest(".met[data-def], [data-def].disp");
   if (card && DEFS[card.dataset.def]){
-    resumenDiaPendiente = null;
     const [t,txt] = DEFS[card.dataset.def];
     $("def-titulo").textContent = t; $("def-texto").innerHTML = txt.replaceAll("\n","<br>");
     $("definicion").classList.remove("oculto");
-  }
-  // Segundo toque sobre el mensaje resumen de un dia (abierto desde la vista semana) -> abre el timeline de ese dia
-  if (resumenDiaPendiente!=null && e.target.closest("#definicion") && !e.target.closest("button")){
-    suenoDiaOffset = resumenDiaPendiente - (DATOS.wellness.length - 1);
-    resumenDiaPendiente = null;
-    $("definicion").classList.add("oculto");
-    document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
-    document.querySelector('.rangoS[data-n="1"]').classList.add("act");
-    pintarSueno(1);
   }
   // Tocar la tarjeta "Peso" tambien expande su grafica de evolucion
   if (card && card.dataset.def === "peso"){
