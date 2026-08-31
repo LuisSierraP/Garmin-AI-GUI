@@ -563,6 +563,13 @@ function kmsHTML(acts){
 // Musculos primarios y secundarios por ejercicio -- conocimiento estandar de
 // kinesiologia (que musculo mueve principalmente el ejercicio vs. cuales
 // asisten), no una teoria de autor que necesite aprobacion previa.
+// Mapeo fino, prioritario: por SUBCATEGORIA exacta de Garmin (ej. el
+// ejercicio real, no solo la categoria general). Se completa poco a poco,
+// verificado contra la tabla oficial -- nunca se inventa una entrada.
+const MUSCULOS_POR_SUBCATEGORIA = {
+  WEIGHTED_GHD_BACK_EXTENSIONS: { p:["espalda_baja"], s:[] }, // verificado: Garmin oficial, categoria "Core"
+};
+
 const MUSCULOS_DETALLE = {
   BENCH_PRESS:      { p:["pecho"], s:["triceps","hombro_frontal"] },
   PUSH_UP:          { p:["pecho"], s:["triceps","hombro_frontal","core"] },
@@ -1218,12 +1225,12 @@ function guardarEjercicio(id, ej){
 }
 
 function seccionFuerza(id, meta){
-  const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, series:e.series, reps:e.reps, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
+  const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, subcategoria:e.subcategoria, ejercicio:e.ejercicio, series:e.series, reps:e.reps, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
   const manuales = ejerciciosGuardados(id).map(e=>({...e, origen:"manual"}));
   const todos = [...deGarmin, ...manuales];
   const primarios = new Set(), secundarios = new Set();
   todos.forEach(e=>{
-    const md = MUSCULOS_DETALLE[e.categoria];
+    const md = MUSCULOS_POR_SUBCATEGORIA[e.subcategoria] || MUSCULOS_DETALLE[e.categoria];
     if (!md) return;
     md.p.forEach(m=>primarios.add(m));
     md.s.forEach(m=>{ if (!primarios.has(m)) secundarios.add(m); });
@@ -1233,7 +1240,8 @@ function seccionFuerza(id, meta){
   let html = `<section class="tarjeta"><h2 class="disp">Ejercicios</h2>`;
   if (todos.length){
     html += `<div style="font-size:13px">` + todos.map(e=>{
-      const nombre = CATEGORIA_NOMBRE[e.categoria] || e.categoria || "Ejercicio";
+      const nombreSub = e.subcategoria ? e.subcategoria.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()) : null;
+      const nombre = e.ejercicio || nombreSub || CATEGORIA_NOMBRE[e.categoria] || e.categoria || "Ejercicio";
       const partes = [e.series?`${e.series} serie${e.series>1?"s":""}`:null, e.reps?`${e.reps} reps`:null, e.peso?`${e.peso} kg`:null].filter(Boolean).join(" · ");
       return `<div class="fila">${nombre}${partes?" — "+partes:""} <span class="sub">(${e.origen})</span></div>`;
     }).join("") + `</div>`;
