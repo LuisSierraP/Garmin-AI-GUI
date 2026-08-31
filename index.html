@@ -610,6 +610,23 @@ function pintarSueno(n){
         { label:"REM", data:w.map(x=>horas(x.sleep_rem_s)), backgroundColor:FASE_COLOR.rem, stack:"s", borderRadius:4 },
       ] : [{ label:"Horas de sueño", data:w.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
     options: { ...baseOpts("h"),
+      plugins: {
+        legend: { labels:{ color:css('--suave'), font:{size:11} } },
+        tooltip: {
+          mode: "index", // toca cualquier parte de la barra -> muestra TODAS las fases de ese dia, no solo la tocada
+          intersect: false,
+          callbacks: {
+            title: (items) => items.length ? fDia(w[items[0].dataIndex].day) : "",
+            label: (ctx) => ctx.parsed.y!=null ? `${ctx.dataset.label}: ${ctx.parsed.y} h` : null,
+            afterBody: (items) => {
+              if (!items.length) return "";
+              const d = w[items[0].dataIndex];
+              const total = horas(d.sleep_seconds);
+              return total!=null ? `Total: ${total} h` : "";
+            },
+          },
+        },
+      },
       onClick: (evt, elems) => {
         if (!elems.length) return;
         const idxEnW = elems[0].index;
