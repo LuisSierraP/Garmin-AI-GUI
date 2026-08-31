@@ -144,6 +144,11 @@ canvas{max-width:100%}
             <button class="btn disp rangoS" data-n="30">mes</button>
           </div>
         </div>
+        <div id="sueno-dia-nav" style="display:none;justify-content:center;align-items:center;gap:8px;margin-bottom:6px">
+          <button class="btn disp" id="sueno-dia-prev">‹</button>
+          <span class="sub" id="sueno-dia-fecha" style="white-space:nowrap"></span>
+          <button class="btn disp" id="sueno-dia-next">›</button>
+        </div>
         <div id="sueno-leyenda" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:12px"></div>
         <canvas id="cSueno" height="180"></canvas>
       </section>
@@ -554,15 +559,26 @@ const FASE_NOMBRE = { despierto: "Despierto", rem: "REM", ligero: "Ligero", prof
 const FASE_ORDEN = ["despierto","rem","ligero","profundo"]; // arriba->abajo en el timeline
 const parseUTC = (s) => new Date(s + "Z"); // Garmin manda hora UTC sin sufijo; forzamos UTC y JS la muestra en tu hora local
 
+let suenoDiaOffset = 0; // 0 = dia mas reciente, -1 = anterior, etc.
 function pintarSueno(n){
   const w = [...DATOS.wellness].slice(-n);
   if (chartSueno) chartSueno.destroy();
 
   if (n===1){
-    pintarTimelineSueno(w[w.length-1] || {});
+    $("sueno-dia-nav").style.display = "flex";
+    const todos = DATOS.wellness;
+    const idx = todos.length - 1 + suenoDiaOffset;
+    $("sueno-dia-next").disabled = suenoDiaOffset>=0;
+    $("sueno-dia-next").style.opacity = suenoDiaOffset>=0 ? .4 : 1;
+    $("sueno-dia-prev").disabled = idx<=0;
+    $("sueno-dia-prev").style.opacity = idx<=0 ? .4 : 1;
+    const dia = todos[idx];
+    $("sueno-dia-fecha").textContent = dia ? fDia(dia.day) : "";
+    pintarTimelineSueno(dia || {});
     return;
   }
 
+  $("sueno-dia-nav").style.display = "none";
   $("sueno-leyenda").innerHTML = "";
   $("sueno-total").textContent = "";
   const conFases = w.some(x=>x.sleep_deep_s!=null);
@@ -915,6 +931,8 @@ $("sugerencia-dia-btn").addEventListener("click", async ()=>{
   }
 });
 
+$("sueno-dia-prev").addEventListener("click", ()=>{ suenoDiaOffset--; pintarSueno(1); });
+$("sueno-dia-next").addEventListener("click", ()=>{ if (suenoDiaOffset<0){ suenoDiaOffset++; pintarSueno(1); } });
 $("semana-prev").addEventListener("click", ()=>{ semanaOffset--; pintarGym(); });
 $("semana-next").addEventListener("click", ()=>{ if (semanaOffset<0){ semanaOffset++; pintarGym(); } });
 
@@ -1537,7 +1555,7 @@ $("fallo-llave").addEventListener("click", ()=>{ localStorage.removeItem(KEY); p
 $("obj-guardar").addEventListener("click", guardarObjetivosRemoto);
 document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }
-  if (e.target.classList.contains("rangoS")){ document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarSueno(+e.target.dataset.n); }
+  if (e.target.classList.contains("rangoS")){ document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); suenoDiaOffset=0; pintarSueno(+e.target.dataset.n); }
   if (e.target.classList.contains("fbici")){ filtroBici = e.target.dataset.t; pintarCiclismo(); }
   if (e.target.classList.contains("fgear")){ filtroGear = e.target.dataset.g; pintarCiclismo(); }
   if (e.target.classList.contains("tabbtn")){
