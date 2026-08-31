@@ -137,7 +137,7 @@ canvas{max-width:100%}
 
       <section class="tarjeta">
         <div class="cab" style="align-items:center">
-          <h2 class="disp">Sueño por fases</h2>
+          <h2 class="disp">Sueño por fases <span class="mono" id="sueno-total" style="font-weight:normal;color:var(--suave);text-transform:none;letter-spacing:normal"></span></h2>
           <div style="display:flex;gap:6px">
             <button class="btn disp rangoS" data-n="1">día</button>
             <button class="btn disp rangoS act" data-n="7">semana</button>
@@ -564,6 +564,7 @@ function pintarSueno(n){
   }
 
   $("sueno-leyenda").innerHTML = "";
+  $("sueno-total").textContent = "";
   const conFases = w.some(x=>x.sleep_deep_s!=null);
   chartSueno = new Chart($("cSueno"), { type:"bar",
     data:{ labels: w.map(x=>fDia(x.day)),
@@ -576,6 +577,8 @@ function pintarSueno(n){
 }
 
 function pintarTimelineSueno(hoy){
+  const h = horas(hoy.sleep_seconds);
+  $("sueno-total").textContent = h!=null ? `— ${h} h` : "";
   const totales = { despierto: hoy.sleep_awake_s, rem: hoy.sleep_rem_s, ligero: hoy.sleep_light_s, profundo: hoy.sleep_deep_s };
   $("sueno-leyenda").innerHTML = FASE_ORDEN.map(f=>{
     const seg = totales[f];
