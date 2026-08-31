@@ -589,7 +589,17 @@ function pintarSueno(n){
         { label:"Ligero", data:w.map(x=>horas(x.sleep_light_s)), backgroundColor:FASE_COLOR.ligero, stack:"s" },
         { label:"REM", data:w.map(x=>horas(x.sleep_rem_s)), backgroundColor:FASE_COLOR.rem, stack:"s", borderRadius:4 },
       ] : [{ label:"Horas de sueño", data:w.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
-    options: { ...baseOpts("h"), scales:{ x:{ ...baseOpts().scales.x, stacked:true, ticks:{...baseOpts().scales.x.ticks, maxTicksLimit: n>10?8:7} }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
+    options: { ...baseOpts("h"),
+      onClick: (evt, elems) => {
+        if (!elems.length) return;
+        const idxEnW = elems[0].index;
+        const idxReal = DATOS.wellness.length - n + idxEnW;
+        suenoDiaOffset = idxReal - (DATOS.wellness.length - 1);
+        document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
+        document.querySelector('.rangoS[data-n="1"]').classList.add("act");
+        pintarSueno(1);
+      },
+      scales:{ x:{ ...baseOpts().scales.x, stacked:true, ticks:{...baseOpts().scales.x.ticks, maxTicksLimit: n>10?8:7} }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
 }
 
 function pintarTimelineSueno(hoy){
