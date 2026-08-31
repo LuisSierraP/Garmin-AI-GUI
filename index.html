@@ -590,40 +590,87 @@ const MUSCULOS_NOMBRE = {pecho:"Pecho",triceps:"Tríceps",biceps:"Bíceps",hombr
 const CATEGORIA_NOMBRE = {BENCH_PRESS:"Press banca",PUSH_UP:"Flexiones",SHOULDER_PRESS:"Press hombro",LATERAL_RAISE:"Elevación lateral",ROW:"Remo",LAT_PULLDOWN:"Jalón dorsal",PULL_UP:"Dominadas",DEADLIFT:"Peso muerto",SQUAT:"Sentadilla",LUNGE:"Zancada",LEG_PRESS:"Prensa piernas",LEG_EXTENSION:"Extensión cuádriceps",LEG_CURL:"Curl femoral",CALF_RAISE:"Elevación talones",BICEP_CURL:"Curl bíceps",TRICEP_EXTENSION:"Extensión tríceps",DIP:"Fondos",PLANK:"Plancha",CRUNCH:"Abdominales",CORE:"Core",CABLE_PULL:"Polea"};
 
 function diagramaCuerpo(primarios, secundarios){
-  // silueta esquematica frontal+posterior; 3 niveles, igual criterio visual que Garmin/Strava
-  const col = (id)=> primarios.has(id) ? css('--fc') : secundarios.has(id) ? css('--alba') : css('--borde');
-  const region = (id, d) => `<path d="${d}" fill="${col(id)}" stroke="${css('--fondo')}" stroke-width="1.5"/>`;
-  return `<svg viewBox="0 0 140 220" style="width:100%;max-width:180px;display:block;margin:8px auto">
-    <ellipse cx="70" cy="18" rx="14" ry="16" fill="${css('--contorno')}"/>
-    ${region("hombro_frontal","M40,42 Q70,32 100,42 L96,58 Q70,48 44,58 Z")}
-    ${region("pecho","M46,58 Q70,50 94,58 L92,86 Q70,94 48,86 Z")}
-    ${region("biceps","M32,60 Q26,80 30,100 L42,98 Q40,78 44,60 Z")}
-    ${region("biceps","M108,60 Q114,80 110,100 L98,98 Q100,78 96,60 Z")}
-    ${region("core","M50,88 Q70,96 90,88 L88,120 Q70,126 52,120 Z")}
-    ${region("cuadriceps","M52,124 Q68,130 66,160 L54,158 Q50,140 52,124 Z")}
-    ${region("cuadriceps","M88,124 Q72,130 74,160 L86,158 Q90,140 88,124 Z")}
-    ${region("gemelo","M54,162 L64,162 L62,196 L56,196 Z")}
-    ${region("gemelo","M86,162 L76,162 L78,196 L84,196 Z")}
-    <text x="70" y="212" text-anchor="middle" font-size="9" fill="${css('--suave')}">frontal (esquemático)</text>
+  // Silueta anatomica frontal+posterior (esquematica, mas curva y muscular que
+  // rectangulos), paleta al estilo Strava: naranja vivo = primario, naranja
+  // suave = secundario, gris = no trabajado. Mismo criterio de 3 niveles que
+  // Garmin, colores propios de este diagrama (no ligados a la paleta general
+  // de la app, es una eleccion de estilo deliberada).
+  const NARANJA_PRIMARIO = "#FC4C02";
+  const NARANJA_SECUNDARIO = "#FFB27D";
+  const SIN_TRABAJAR = css('--borde');
+  const col = (id)=> primarios.has(id) ? NARANJA_PRIMARIO : secundarios.has(id) ? NARANJA_SECUNDARIO : SIN_TRABAJAR;
+  const region = (id, d) => `<path d="${d}" fill="${col(id)}" stroke="${css('--fondo')}" stroke-width="1"/>`;
+  const piel = css('--contorno');
+
+  return `<svg viewBox="0 0 160 260" style="width:100%;max-width:190px;display:block;margin:8px auto">
+    <!-- cabeza + cuello -->
+    <ellipse cx="80" cy="16" rx="13" ry="15" fill="${piel}"/>
+    <path d="M72,28 L88,28 L90,38 L70,38 Z" fill="${piel}"/>
+    <!-- torso base (piel, por si algo queda sin cubrir) -->
+    <path d="M52,40 Q80,32 108,40 L112,96 Q80,106 48,96 Z" fill="${piel}" opacity="0.35"/>
+    <!-- hombros / deltoides frontales -->
+    ${region("hombro_frontal","M40,42 Q52,36 60,40 Q56,52 50,60 Q40,58 36,50 Z")}
+    ${region("hombro_frontal","M120,42 Q108,36 100,40 Q104,52 110,60 Q120,58 124,50 Z")}
+    <!-- pecho -->
+    ${region("pecho","M58,42 Q80,34 102,42 L100,58 Q80,52 60,58 Z")}
+    ${region("pecho","M60,58 Q80,64 100,58 L98,78 Q80,84 62,78 Z")}
+    <!-- biceps -->
+    ${region("biceps","M34,52 Q28,70 30,92 Q38,94 42,88 Q40,68 44,54 Z")}
+    ${region("biceps","M126,52 Q132,70 130,92 Q122,94 118,88 Q120,68 116,54 Z")}
+    <!-- antebrazos (piel, no se colorean por falta de dato de agarre) -->
+    <path d="M30,92 Q26,108 30,124 L40,122 Q38,106 40,90 Z" fill="${piel}" opacity="0.6"/>
+    <path d="M130,92 Q134,108 130,124 L120,122 Q122,106 120,90 Z" fill="${piel}" opacity="0.6"/>
+    <!-- abdomen -->
+    ${region("core","M62,80 Q80,86 98,80 L96,100 Q80,106 64,100 Z")}
+    ${region("core","M64,100 Q80,105 96,100 L94,118 Q80,123 66,118 Z")}
+    <!-- oblicuos -->
+    ${region("core","M56,82 Q60,100 58,118 L48,114 Q50,96 52,80 Z")}
+    ${region("core","M104,82 Q100,100 102,118 L112,114 Q110,96 108,80 Z")}
+    <!-- cadera / cuadriceps -->
+    ${region("cuadriceps","M56,120 Q66,126 74,124 Q74,150 70,178 L58,176 Q54,148 56,120 Z")}
+    ${region("cuadriceps","M104,120 Q94,126 86,124 Q86,150 90,178 L102,176 Q106,148 104,120 Z")}
+    <!-- rodillas (piel) -->
+    <ellipse cx="64" cy="180" rx="7" ry="6" fill="${piel}" opacity="0.6"/>
+    <ellipse cx="96" cy="180" rx="7" ry="6" fill="${piel}" opacity="0.6"/>
+    <!-- gemelos -->
+    ${region("gemelo","M58,188 Q66,192 70,188 L68,222 Q64,226 60,222 Z")}
+    ${region("gemelo","M102,188 Q94,192 90,188 L92,222 Q96,226 100,222 Z")}
+    <text x="80" y="248" text-anchor="middle" font-size="10" fill="${css('--suave')}">frontal (esquemático)</text>
   </svg>
-  <svg viewBox="0 0 140 220" style="width:100%;max-width:180px;display:block;margin:8px auto">
-    <ellipse cx="70" cy="18" rx="14" ry="16" fill="${css('--contorno')}"/>
-    ${region("hombro_posterior","M40,42 Q70,32 100,42 L96,58 Q70,48 44,58 Z")}
-    ${region("espalda_alta","M46,58 Q70,50 94,58 L92,86 Q70,94 48,86 Z")}
-    ${region("triceps","M32,60 Q26,80 30,100 L42,98 Q40,78 44,60 Z")}
-    ${region("triceps","M108,60 Q114,80 110,100 L98,98 Q100,78 96,60 Z")}
-    ${region("espalda_baja","M50,88 Q70,96 90,88 L88,112 Q70,118 52,112 Z")}
-    ${region("gluteo","M50,114 Q70,122 90,114 L88,132 Q70,138 52,132 Z")}
-    ${region("isquiotibial","M52,134 Q68,140 66,160 L54,158 Q50,146 52,134 Z")}
-    ${region("isquiotibial","M88,134 Q72,140 74,160 L86,158 Q90,146 88,134 Z")}
-    ${region("gemelo","M54,162 L64,162 L62,196 L56,196 Z")}
-    ${region("gemelo","M86,162 L76,162 L78,196 L84,196 Z")}
-    <text x="70" y="212" text-anchor="middle" font-size="9" fill="${css('--suave')}">posterior (esquemático)</text>
+  <svg viewBox="0 0 160 260" style="width:100%;max-width:190px;display:block;margin:8px auto">
+    <ellipse cx="80" cy="16" rx="13" ry="15" fill="${piel}"/>
+    <path d="M72,28 L88,28 L90,38 L70,38 Z" fill="${piel}"/>
+    <path d="M52,40 Q80,32 108,40 L112,96 Q80,106 48,96 Z" fill="${piel}" opacity="0.35"/>
+    <!-- deltoides posteriores -->
+    ${region("hombro_posterior","M40,42 Q52,36 60,40 Q56,52 50,60 Q40,58 36,50 Z")}
+    ${region("hombro_posterior","M120,42 Q108,36 100,40 Q104,52 110,60 Q120,58 124,50 Z")}
+    <!-- trapecio / espalda alta -->
+    ${region("espalda_alta","M62,38 Q80,32 98,38 L94,54 Q80,50 66,54 Z")}
+    <!-- dorsales (forma de ala) -->
+    ${region("espalda_alta","M58,54 Q46,66 48,82 Q60,90 70,84 Q64,68 66,54 Z")}
+    ${region("espalda_alta","M102,54 Q114,66 112,82 Q100,90 90,84 Q96,68 94,54 Z")}
+    <!-- triceps -->
+    ${region("triceps","M34,52 Q28,70 30,92 Q38,94 42,88 Q40,68 44,54 Z")}
+    ${region("triceps","M126,52 Q132,70 130,92 Q122,94 118,88 Q120,68 116,54 Z")}
+    <path d="M30,92 Q26,108 30,124 L40,122 Q38,106 40,90 Z" fill="${piel}" opacity="0.6"/>
+    <path d="M130,92 Q134,108 130,124 L120,122 Q122,106 120,90 Z" fill="${piel}" opacity="0.6"/>
+    <!-- espalda baja / lumbar -->
+    ${region("espalda_baja","M64,84 Q80,90 96,84 L94,104 Q80,110 66,104 Z")}
+    <!-- gluteos -->
+    ${region("gluteo","M58,104 Q80,112 102,104 L100,126 Q80,132 60,126 Z")}
+    <!-- isquiotibiales -->
+    ${region("isquiotibial","M58,128 Q66,132 72,130 Q72,152 68,176 L58,174 Q54,150 58,128 Z")}
+    ${region("isquiotibial","M102,128 Q94,132 88,130 Q88,152 92,176 L102,174 Q106,150 102,128 Z")}
+    <ellipse cx="64" cy="180" rx="7" ry="6" fill="${piel}" opacity="0.6"/>
+    <ellipse cx="96" cy="180" rx="7" ry="6" fill="${piel}" opacity="0.6"/>
+    ${region("gemelo","M58,188 Q66,192 70,188 L68,222 Q64,226 60,222 Z")}
+    ${region("gemelo","M102,188 Q94,192 90,188 L92,222 Q96,226 100,222 Z")}
+    <text x="80" y="248" text-anchor="middle" font-size="10" fill="${css('--suave')}">posterior (esquemático)</text>
   </svg>
-  <div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:${css('--suave')}">
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${css('--fc')};margin-right:4px"></span>Primario</span>
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${css('--alba')};margin-right:4px"></span>Secundario</span>
-    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${css('--borde')};margin-right:4px"></span>No trabajado</span>
+  <div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:${css('--suave')};margin-top:4px">
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${NARANJA_PRIMARIO};margin-right:4px"></span>Primario</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${NARANJA_SECUNDARIO};margin-right:4px"></span>Secundario</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${SIN_TRABAJAR};margin-right:4px"></span>No trabajado</span>
   </div>`;
 }
 
