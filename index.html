@@ -199,7 +199,17 @@ canvas{max-width:100%}
       </section>
 
       <section class="tarjeta"><h2 class="disp">Resumen</h2><div class="grid3" id="gym-resumen"></div></section>
-      <section class="tarjeta"><h2 class="disp">Carga muscular — semana actual</h2><div id="gym-mapa-semana"></div></section>
+      <section class="tarjeta">
+        <div class="cab" style="align-items:center">
+          <h2 class="disp">Carga muscular</h2>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="btn disp" id="semana-prev">‹</button>
+            <span class="sub" id="semana-rango" style="white-space:nowrap"></span>
+            <button class="btn disp" id="semana-next">›</button>
+          </div>
+        </div>
+        <div id="gym-mapa-semana"></div>
+      </section>
       <section class="tarjeta"><h2 class="disp">Sesiones</h2><div id="gym-lista"></div></section>
     </div>
 
@@ -843,6 +853,9 @@ $("sugerencia-dia-btn").addEventListener("click", async ()=>{
   }
 });
 
+$("semana-prev").addEventListener("click", ()=>{ semanaOffset--; pintarGym(); });
+$("semana-next").addEventListener("click", ()=>{ if (semanaOffset<0){ semanaOffset++; pintarGym(); } });
+
 $("bt-toggle").addEventListener("click", ()=>{
   $("bt-panel").classList.toggle("abierto");
   $("bt-flecha").textContent = $("bt-panel").classList.contains("abierto") ? "▴" : "▾";
@@ -949,8 +962,10 @@ function lunesDeSemana(d){
   const l = new Date(d); l.setDate(d.getDate()-dia); l.setHours(0,0,0,0);
   return l;
 }
-function cargaMuscularSemana(){
+let semanaOffset = 0; // 0 = semana actual, -1 = semana pasada, etc.
+function cargaMuscularSemana(offset){
   const lunes = lunesDeSemana(new Date());
+  lunes.setDate(lunes.getDate() + offset*7);
   const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+7);
   const sesiones = (DATOS.activities||[]).filter(a=>{
     if (!(a.type||"").includes("strength")) return false;
@@ -967,7 +982,13 @@ function cargaMuscularSemana(){
       md.s.forEach(m=>{ if (!md.p.includes(m)) cargaS[m] = (cargaS[m]||0) + peso; });
     });
   });
-  return { cargaP, cargaS, nSesiones: sesiones.length };
+  return { cargaP, cargaS, nSesiones: sesiones.length, lunes, domingo };
+}
+function fRangoSemana(lunes, domingo){
+  const fin = new Date(domingo); fin.setDate(fin.getDate()-1);
+  const mismo = lunes.getMonth()===fin.getMonth();
+  const f = (d)=> `${d.getDate()} ${MES[d.getMonth()]}`;
+  return mismo ? `${lunes.getDate()}-${fin.getDate()} ${MES[fin.getMonth()]}` : `${f(lunes)} - ${f(fin)}`;
 }
 function interpolarColor(c1, c2, t){
   t = Math.max(0, Math.min(1, t));
@@ -1005,10 +1026,13 @@ function diagramaCargaSemanal(cargaP, cargaS){
 }
 
 function pintarGym(){
-  const { cargaP, cargaS, nSesiones } = cargaMuscularSemana();
+  const { cargaP, cargaS, nSesiones, lunes, domingo } = cargaMuscularSemana(semanaOffset);
+  $("semana-rango").textContent = semanaOffset===0 ? "esta semana" : fRangoSemana(lunes, domingo);
+  $("semana-next").disabled = semanaOffset>=0;
+  $("semana-next").style.opacity = semanaOffset>=0 ? .4 : 1;
   $("gym-mapa-semana").innerHTML = nSesiones
     ? diagramaCargaSemanal(cargaP, cargaS)
-    : '<p class="sub">Sin sesiones de fuerza esta semana todavía.</p>';
+    : `<p class="sub">Sin sesiones de fuerza ${semanaOffset===0?"esta semana":"en esa semana"} todavía.</p>`;
   const sesiones = (DATOS.activities||[]).filter(a=>esGym(a.type));
   const fuerza = sesiones.filter(a=>(a.type||"").includes("strength"));
   const natacion = sesiones.filter(a=>(a.type||"").includes("swim"));
