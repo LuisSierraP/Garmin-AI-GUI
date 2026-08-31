@@ -144,6 +144,7 @@ canvas{max-width:100%}
             <button class="btn disp rangoS" data-n="30">mes</button>
           </div>
         </div>
+        <div id="sueno-leyenda" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;font-size:12px"></div>
         <canvas id="cSueno" height="180"></canvas>
       </section>
 
@@ -548,18 +549,76 @@ function pintarTrend(n){
     options: baseOpts() });
 }
 
+const FASE_COLOR = { despierto: css('--fc'), rem: "#AAB7E9", ligero: "#7D8FD6", profundo: "#5B6FBF" };
+const FASE_NOMBRE = { despierto: "Despierto", rem: "REM", ligero: "Ligero", profundo: "Profundo" };
+const FASE_ORDEN = ["despierto","rem","ligero","profundo"]; // arriba->abajo en el timeline
+const parseUTC = (s) => new Date(s + "Z"); // Garmin manda hora UTC sin sufijo; forzamos UTC y JS la muestra en tu hora local
+
 function pintarSueno(n){
   const w = [...DATOS.wellness].slice(-n);
   if (chartSueno) chartSueno.destroy();
+
+  if (n===1){
+    pintarTimelineSueno(w[w.length-1] || {});
+    return;
+  }
+
+  $("sueno-leyenda").innerHTML = "";
   const conFases = w.some(x=>x.sleep_deep_s!=null);
   chartSueno = new Chart($("cSueno"), { type:"bar",
-    data:{ labels: w.map(x=> n===1 ? "Anoche" : fDia(x.day)),
+    data:{ labels: w.map(x=>fDia(x.day)),
       datasets: conFases ? [
-        { label:"Profundo", data:w.map(x=>horas(x.sleep_deep_s)), backgroundColor:"#5B6FBF", stack:"s" },
-        { label:"Ligero", data:w.map(x=>horas(x.sleep_light_s)), backgroundColor:"#7D8FD6", stack:"s" },
-        { label:"REM", data:w.map(x=>horas(x.sleep_rem_s)), backgroundColor:"#AAB7E9", stack:"s", borderRadius:4 },
+        { label:"Profundo", data:w.map(x=>horas(x.sleep_deep_s)), backgroundColor:FASE_COLOR.profundo, stack:"s" },
+        { label:"Ligero", data:w.map(x=>horas(x.sleep_light_s)), backgroundColor:FASE_COLOR.ligero, stack:"s" },
+        { label:"REM", data:w.map(x=>horas(x.sleep_rem_s)), backgroundColor:FASE_COLOR.rem, stack:"s", borderRadius:4 },
       ] : [{ label:"Horas de sueño", data:w.map(x=>horas(x.sleep_seconds)), backgroundColor:css('--sueno'), borderRadius:4 }]},
     options: { ...baseOpts("h"), scales:{ x:{ ...baseOpts().scales.x, stacked:true, ticks:{...baseOpts().scales.x.ticks, maxTicksLimit: n>10?8:7} }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
+}
+
+function pintarTimelineSueno(hoy){
+  const totales = { despierto: hoy.sleep_awake_s, rem: hoy.sleep_rem_s, ligero: hoy.sleep_light_s, profundo: hoy.sleep_deep_s };
+  $("sueno-leyenda").innerHTML = FASE_ORDEN.map(f=>{
+    const seg = totales[f];
+    if (seg==null) return "";
+    const h = Math.floor(seg/3600), m = Math.round((seg%3600)/60);
+    const txt = h>0 ? `${h}h ${m}min` : `${m} min`;
+    return `<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:${FASE_COLOR[f]};display:inline-block"></span>${FASE_NOMBRE[f]} — ${txt}</span>`;
+  }).join("");
+
+  const fases = hoy.sleep_fases || [];
+  if (!fases.length){
+    chartSueno = null;
+    $("cSueno").getContext("2d").clearRect(0,0,$("cSueno").width,$("cSueno").height);
+    return;
+  }
+
+  const ref = new Date(Math.min(...fases.map(f=>parseUTC(f.i).getTime())));
+  ref.setMinutes(0,0,0);
+  const refMs = ref.getTime();
+  const datos = fases.map(f=>({
+    x: [(parseUTC(f.i).getTime()-refMs)/60000, (parseUTC(f.f).getTime()-refMs)/60000],
+    y: FASE_NOMBRE[f.fase],
+    backgroundColor: FASE_COLOR[f.fase],
+  }));
+  const maxMin = Math.max(...fases.map(f=>(parseUTC(f.f).getTime()-refMs)/60000));
+  const fHora = (mins)=>{ const t = new Date(refMs + mins*60000); return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`; };
+
+  chartSueno = new Chart($("cSueno"), {
+    type: "bar",
+    data:{ datasets:[{ data: datos, backgroundColor: datos.map(d=>d.backgroundColor), borderRadius:2, barThickness:20 }] },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label:(ctx)=> `${fHora(ctx.raw.x[0])} - ${fHora(ctx.raw.x[1])}` } },
+      },
+      scales: {
+        x: { min:0, max:maxMin, ticks:{ color:css('--suave'), font:{size:10}, maxTicksLimit:7, callback:(val)=>fHora(val) }, grid:{ color:css('--borde') } },
+        y: { type:"category", labels: FASE_ORDEN.map(f=>FASE_NOMBRE[f]), ticks:{ color:css('--suave'), font:{size:11} }, grid:{ display:false } },
+      },
+    },
+  });
 }
 
 function sumKm(acts, dias){
