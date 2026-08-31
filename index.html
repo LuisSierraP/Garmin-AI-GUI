@@ -743,26 +743,26 @@ const MUSCULOS_DETALLE = {
   BENCH_PRESS:      { p:["pecho"], s:["triceps","hombro_frontal"] }, // verificado: CHEST primario, SHOULDERS+TRICEPS secundario (Garmin no distingue que parte del hombro)
   INDOOR_BIKE:      { p:["cuadriceps"], s:["isquiotibial","gluteo","gemelo"] }, // verificado: tabla oficial "Bike" (Bike Outdoor) = QUADS primario, HAMSTRINGS+GLUTES+CALVES secundario
   PUSH_UP:          { p:["pecho"], s:["triceps","hombro_frontal","core"] },
-  SHOULDER_PRESS:   { p:["hombro_frontal","hombro_lateral"], s:["triceps"] },
+  SHOULDER_PRESS:   { p:["hombro_frontal","hombro_lateral"], s:["triceps","pecho","espalda_alta"] }, // CONFIRMADO tabla oficial: +CHEST +TRAPS secundario que faltaban
   LATERAL_RAISE:    { p:["hombro_lateral"], s:["espalda_alta"] }, // ajustado: version con banda de Garmin muestra TRAPS como coactivado
-  ROW:              { p:["espalda_alta","dorsal"], s:["biceps","hombro_posterior"] }, // SIN VERIFICAR contra tabla oficial -- no pude alcanzar esa fila pese a varios intentos
-  LAT_PULLDOWN:     { p:["dorsal"], s:["biceps","hombro_posterior"] },
-  PULL_UP:          { p:["dorsal"], s:["biceps","hombro_posterior","core"] }, // SIN VERIFICAR contra tabla oficial
-  DEADLIFT:         { p:["espalda_baja","isquiotibial","gluteo"], s:["dorsal","core"] }, // SIN VERIFICAR contra tabla oficial
+  ROW:              { p:["espalda_alta","dorsal"], s:["biceps","hombro_posterior","espalda_baja"] }, // CONFIRMADO tabla oficial: LATS+TRAPS primario (ya lo tenia bien), +espalda_baja secundario que faltaba
+  LAT_PULLDOWN:     { p:["dorsal"], s:["biceps","hombro_posterior","espalda_alta"] }, // CONFIRMADO tabla oficial: +TRAPS secundario que faltaba
+  PULL_UP:          { p:["dorsal","espalda_alta"], s:["biceps","antebrazo","hombro_posterior"] }, // CONFIRMADO tabla oficial: LATS+TRAPS primario, BICEPS+FOREARM+SHOULDERS secundario
+  DEADLIFT:         { p:["espalda_baja","isquiotibial"], s:["dorsal","espalda_alta","antebrazo","cuadriceps","gluteo"] }, // CONFIRMADO tabla oficial: primario solo HAMSTRINGS+LOWER_BACK (gluteo pasa a secundario)
   SQUAT:            { p:["cuadriceps","gluteo"], s:["isquiotibial"] }, // verificado (doc de ejemplo del mismo repo oficial): Quads+Glutes primario, Hamstrings secundario -- quite "core", no estaba confirmado
   LUNGE:            { p:["cuadriceps","gluteo"], s:["isquiotibial"] },
-  LEG_PRESS:        { p:["cuadriceps","gluteo"], s:["isquiotibial"] }, // corregido: glute es PRIMARIO no secundario, y faltaba isquiotibial secundario
+  LEG_PRESS:        { p:["cuadriceps"], s:["gluteo","isquiotibial"] }, // RECONFIRMADO con la tabla oficial completa: solo QUADS primario (el doc de ejemplo anterior era menos preciso)
   LEG_EXTENSION:    { p:["cuadriceps"], s:[] },
-  LEG_CURL:         { p:["isquiotibial"], s:["gluteo"] }, // añadido gluteo secundario, confirmado
+  LEG_CURL:         { p:["isquiotibial"], s:[] }, // RECONFIRMADO: la fila exacta "Leg Curl" de la tabla oficial no trae secundario -- revertido el gluteo que habia añadido antes con una fuente menos precisa
   CALF_RAISE:       { p:["gemelo"], s:[] },
   CURL:             { p:["biceps"], s:["antebrazo"] }, // Garmin usa "CURL", no "BICEP_CURL" -- corregido tras verificar dato real
   TRICEP_EXTENSION: { p:["triceps"], s:[] },
-  DIP:              { p:["triceps","pecho"], s:["hombro_frontal"] },
+  DIP:              { p:["triceps"], s:["pecho","hombro_frontal"] }, // CONFIRMADO tabla oficial: solo TRICEPS primario, pecho pasa a secundario
   PLANK:            { p:["core"], s:["oblicuos"] },
   CRUNCH:           { p:["core"], s:["oblicuos"] },
   CORE:             { p:["core","oblicuos"], s:[] },
   CABLE_PULL:       { p:["dorsal"], s:["biceps"] },
-  SHRUG:            { p:["espalda_alta"], s:["antebrazo"] }, // AUN SIN VERIFICAR contra la tabla oficial -- la parte "Shrug" de la tabla no la he alcanzado a leer todavia. Es mi mejor estimacion de kinesiologia, no un dato confirmado
+  SHRUG:            { p:["espalda_alta"], s:["hombro_frontal"] }, // CONFIRMADO tabla oficial: TRAPS primario (ya estaba bien), SHOULDERS generico secundario (no antebrazo)
 };
 const MUSCULOS_NOMBRE = {pecho:"Pecho",triceps:"Tríceps",biceps:"Bíceps",antebrazo:"Antebrazo",hombro_frontal:"Hombro (frontal)",hombro_lateral:"Hombro (lateral)",hombro_posterior:"Hombro (posterior)",espalda_alta:"Espalda alta",espalda_baja:"Espalda baja",dorsal:"Dorsal",gluteo:"Glúteo",cuadriceps:"Cuádriceps",isquiotibial:"Isquiotibial",gemelo:"Gemelo",core:"Abdomen",oblicuos:"Oblicuos"};
 const CATEGORIA_NOMBRE = {BENCH_PRESS:"Press banca",PUSH_UP:"Flexiones",SHOULDER_PRESS:"Press hombro",LATERAL_RAISE:"Elevación lateral",ROW:"Remo",LAT_PULLDOWN:"Jalón dorsal",PULL_UP:"Dominadas",DEADLIFT:"Peso muerto",SQUAT:"Sentadilla",LUNGE:"Zancada",LEG_PRESS:"Prensa piernas",LEG_EXTENSION:"Extensión cuádriceps",LEG_CURL:"Curl femoral",CALF_RAISE:"Elevación talones",CURL:"Curl bíceps",SHRUG:"Encogimientos",INDOOR_BIKE:"Bicicleta indoor",TRICEP_EXTENSION:"Extensión tríceps",DIP:"Fondos",PLANK:"Plancha",CRUNCH:"Abdominales",CORE:"Core",CABLE_PULL:"Polea"};
