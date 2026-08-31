@@ -745,15 +745,15 @@ const MUSCULOS_DETALLE = {
   PUSH_UP:          { p:["pecho"], s:["triceps","hombro_frontal","core"] },
   SHOULDER_PRESS:   { p:["hombro_frontal","hombro_lateral"], s:["triceps"] },
   LATERAL_RAISE:    { p:["hombro_lateral"], s:["espalda_alta"] }, // ajustado: version con banda de Garmin muestra TRAPS como coactivado
-  ROW:              { p:["espalda_alta","dorsal"], s:["biceps","hombro_posterior"] },
+  ROW:              { p:["espalda_alta","dorsal"], s:["biceps","hombro_posterior"] }, // SIN VERIFICAR contra tabla oficial -- no pude alcanzar esa fila pese a varios intentos
   LAT_PULLDOWN:     { p:["dorsal"], s:["biceps","hombro_posterior"] },
-  PULL_UP:          { p:["dorsal"], s:["biceps","hombro_posterior","core"] },
-  DEADLIFT:         { p:["espalda_baja","isquiotibial","gluteo"], s:["dorsal","core"] },
-  SQUAT:            { p:["cuadriceps","gluteo"], s:["core","isquiotibial"] },
+  PULL_UP:          { p:["dorsal"], s:["biceps","hombro_posterior","core"] }, // SIN VERIFICAR contra tabla oficial
+  DEADLIFT:         { p:["espalda_baja","isquiotibial","gluteo"], s:["dorsal","core"] }, // SIN VERIFICAR contra tabla oficial
+  SQUAT:            { p:["cuadriceps","gluteo"], s:["isquiotibial"] }, // verificado (doc de ejemplo del mismo repo oficial): Quads+Glutes primario, Hamstrings secundario -- quite "core", no estaba confirmado
   LUNGE:            { p:["cuadriceps","gluteo"], s:["isquiotibial"] },
-  LEG_PRESS:        { p:["cuadriceps"], s:["gluteo"] },
+  LEG_PRESS:        { p:["cuadriceps","gluteo"], s:["isquiotibial"] }, // corregido: glute es PRIMARIO no secundario, y faltaba isquiotibial secundario
   LEG_EXTENSION:    { p:["cuadriceps"], s:[] },
-  LEG_CURL:         { p:["isquiotibial"], s:[] },
+  LEG_CURL:         { p:["isquiotibial"], s:["gluteo"] }, // añadido gluteo secundario, confirmado
   CALF_RAISE:       { p:["gemelo"], s:[] },
   CURL:             { p:["biceps"], s:["antebrazo"] }, // Garmin usa "CURL", no "BICEP_CURL" -- corregido tras verificar dato real
   TRICEP_EXTENSION: { p:["triceps"], s:[] },
