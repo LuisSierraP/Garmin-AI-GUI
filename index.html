@@ -723,16 +723,17 @@ const MUSCULOS_DETALLE = {
   LEG_EXTENSION:    { p:["cuadriceps"], s:[] },
   LEG_CURL:         { p:["isquiotibial"], s:[] },
   CALF_RAISE:       { p:["gemelo"], s:[] },
-  BICEP_CURL:       { p:["biceps"], s:["antebrazo"] },
+  CURL:             { p:["biceps"], s:["antebrazo"] }, // Garmin usa "CURL", no "BICEP_CURL" -- corregido tras verificar dato real
   TRICEP_EXTENSION: { p:["triceps"], s:[] },
   DIP:              { p:["triceps","pecho"], s:["hombro_frontal"] },
   PLANK:            { p:["core"], s:["oblicuos"] },
   CRUNCH:           { p:["core"], s:["oblicuos"] },
   CORE:             { p:["core","oblicuos"], s:[] },
   CABLE_PULL:       { p:["dorsal"], s:["biceps"] },
+  SHRUG:            { p:["espalda_alta"], s:["antebrazo"] }, // faltaba por completo -- encogimientos, categoria real de Garmin
 };
 const MUSCULOS_NOMBRE = {pecho:"Pecho",triceps:"Tríceps",biceps:"Bíceps",antebrazo:"Antebrazo",hombro_frontal:"Hombro (frontal)",hombro_lateral:"Hombro (lateral)",hombro_posterior:"Hombro (posterior)",espalda_alta:"Espalda alta",espalda_baja:"Espalda baja",dorsal:"Dorsal",gluteo:"Glúteo",cuadriceps:"Cuádriceps",isquiotibial:"Isquiotibial",gemelo:"Gemelo",core:"Abdomen",oblicuos:"Oblicuos"};
-const CATEGORIA_NOMBRE = {BENCH_PRESS:"Press banca",PUSH_UP:"Flexiones",SHOULDER_PRESS:"Press hombro",LATERAL_RAISE:"Elevación lateral",ROW:"Remo",LAT_PULLDOWN:"Jalón dorsal",PULL_UP:"Dominadas",DEADLIFT:"Peso muerto",SQUAT:"Sentadilla",LUNGE:"Zancada",LEG_PRESS:"Prensa piernas",LEG_EXTENSION:"Extensión cuádriceps",LEG_CURL:"Curl femoral",CALF_RAISE:"Elevación talones",BICEP_CURL:"Curl bíceps",TRICEP_EXTENSION:"Extensión tríceps",DIP:"Fondos",PLANK:"Plancha",CRUNCH:"Abdominales",CORE:"Core",CABLE_PULL:"Polea"};
+const CATEGORIA_NOMBRE = {BENCH_PRESS:"Press banca",PUSH_UP:"Flexiones",SHOULDER_PRESS:"Press hombro",LATERAL_RAISE:"Elevación lateral",ROW:"Remo",LAT_PULLDOWN:"Jalón dorsal",PULL_UP:"Dominadas",DEADLIFT:"Peso muerto",SQUAT:"Sentadilla",LUNGE:"Zancada",LEG_PRESS:"Prensa piernas",LEG_EXTENSION:"Extensión cuádriceps",LEG_CURL:"Curl femoral",CALF_RAISE:"Elevación talones",CURL:"Curl bíceps",SHRUG:"Encogimientos",TRICEP_EXTENSION:"Extensión tríceps",DIP:"Fondos",PLANK:"Plancha",CRUNCH:"Abdominales",CORE:"Core",CABLE_PULL:"Polea"};
 
 // Trazados anatomicos adaptados de la libreria "body-muscles" (c) vulovix,
 // licencia Apache 2.0 (https://github.com/vulovix/body). Se usan las formas
