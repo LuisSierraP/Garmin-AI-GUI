@@ -180,6 +180,28 @@ canvas{max-width:100%}
       <div class="nota-version"><span class="ic">🚧</span><span>Próximamente: coach de IA por deporte, a petición tuya y según tus datos reales</span></div>
     </div>
 
+    <!-- ══════════ TAB GYM ══════════ -->
+    <div id="tab-gym" class="oculto">
+      <section class="tarjeta">
+        <div class="cab" style="cursor:pointer" id="plan-toggle">
+          <h2 class="disp">Plan de entrenamiento</h2>
+          <span class="btn disp" id="plan-flecha">▾</span>
+        </div>
+        <div class="expandible" id="plan-panel">
+          <p class="sub" style="margin:10px 0">Marca tus días de gym (recomendado: 3 a la semana).</p>
+          <div id="plan-dias" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <input id="plan-notas" type="text" placeholder="Notas del plan (opcional)" style="margin-top:10px">
+          <button id="plan-guardar" class="boton disp" style="margin-top:10px">Guardar plan</button>
+          <p id="plan-estado" class="sub" style="margin:8px 0 0"></p>
+          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Historial de planes</p>
+          <div id="plan-historial"></div>
+        </div>
+      </section>
+
+      <section class="tarjeta"><h2 class="disp">Resumen</h2><div class="grid3" id="gym-resumen"></div></section>
+      <section class="tarjeta"><h2 class="disp">Sesiones</h2><div id="gym-lista"></div></section>
+    </div>
+
     <!-- ══════════ TAB SALUD ══════════ -->
     <div id="tab-salud" class="oculto">
       <div class="grid2" id="salud-metricas"></div>
@@ -293,6 +315,7 @@ const fSync = (iso) => { if(!iso) return ""; const d = new Date((iso.endsWith("Z
 const dur = (s) => { if(!s) return null; const h=Math.floor(s/3600), m=Math.round(s%3600/60); return h ? `${h}:${String(m).padStart(2,"0")} h` : `${m} min`; };
 const esBici = (t="") => t.includes("cycl")||t.includes("bik")||t.includes("gravel");
 const esRun = (t="") => t.includes("run");
+const esGym = (t="") => t.includes("strength") || t.includes("swim");
 
 const DEFS = {
   hrv: ["HRV nocturna", "Variación entre latido y latido mientras duermes. Alta = sistema nervioso recuperado y listo; baja = fatiga, estrés o enfermedad incubándose."],
@@ -337,8 +360,8 @@ const notaVersion = (txt) => `<div class="nota-version"><span class="ic">🚧</s
 function pantalla(id){ ["setup","cargando","fallo","panel"].forEach(p=>$(p).classList.toggle("oculto", p!==id)); }
 
 let DATOS=null, CONFIG=null, GEARR=null, BODY=null, OBJETIVOS_REPO=null, BODYTYPE_HIST=null, filtroGear="todos", chartTrend=null, chartSueno=null, chartBB=null, filtroBici="todos";
-const TODAS_TABS = ["general","ciclismo","running","varias","salud"];
-const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
+const TODAS_TABS = ["general","ciclismo","running","gym","varias","salud"];
+const CONFIG_DEFECTO = { tabs: { general:{icono:"🌅",nombre:"General"}, ciclismo:{icono:"🚴",nombre:"Ciclismo"}, running:{icono:"🏃",nombre:"Running"}, gym:{icono:"🏋️",nombre:"Gym"}, varias:{icono:"🥾",nombre:"Varias"}, salud:{icono:"⚕️",nombre:"Salud"} }, perfiles: { luis: { nombre:"Luis", rol:"dueño", tabs: TODAS_TABS } }, perfil_por_defecto:"luis" };
 
 async function cargarConfig(pat){
   try{
@@ -404,6 +427,7 @@ async function cargar(pat){
   await cargarBody(pat);
   OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
   BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
+  PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
   renderTabs();
   pintar();
   pantalla("panel");
@@ -536,22 +560,38 @@ function kmsHTML(acts){
   return rejillaMetricas([["semana",7],["mes",30],["año",365]]
     .map(([label,dias])=>[null, label, sumKm(acts,dias), "km", "", css('--alba')]));
 }
-const MUSCULOS = {
-  BENCH_PRESS:["pecho","triceps","hombro_frontal"], PUSH_UP:["pecho","triceps","hombro_frontal"],
-  SHOULDER_PRESS:["hombro_frontal","hombro_lateral","triceps"], LATERAL_RAISE:["hombro_lateral"],
-  ROW:["espalda_alta","biceps","hombro_posterior"], LAT_PULLDOWN:["dorsal","biceps"], PULL_UP:["dorsal","biceps"],
-  DEADLIFT:["espalda_baja","gluteo","isquiotibial"], SQUAT:["cuadriceps","gluteo"], LUNGE:["cuadriceps","gluteo"],
-  LEG_PRESS:["cuadriceps","gluteo"], LEG_EXTENSION:["cuadriceps"], LEG_CURL:["isquiotibial"],
-  CALF_RAISE:["gemelo"], BICEP_CURL:["biceps"], TRICEP_EXTENSION:["triceps"], DIP:["triceps","pecho"],
-  PLANK:["core"], CRUNCH:["core"], CORE:["core"], CABLE_PULL:["dorsal","biceps"],
+// Musculos primarios y secundarios por ejercicio -- conocimiento estandar de
+// kinesiologia (que musculo mueve principalmente el ejercicio vs. cuales
+// asisten), no una teoria de autor que necesite aprobacion previa.
+const MUSCULOS_DETALLE = {
+  BENCH_PRESS:      { p:["pecho"], s:["triceps","hombro_frontal"] },
+  PUSH_UP:          { p:["pecho"], s:["triceps","hombro_frontal","core"] },
+  SHOULDER_PRESS:   { p:["hombro_frontal","hombro_lateral"], s:["triceps"] },
+  LATERAL_RAISE:    { p:["hombro_lateral"], s:[] },
+  ROW:              { p:["espalda_alta","dorsal"], s:["biceps","hombro_posterior"] },
+  LAT_PULLDOWN:     { p:["dorsal"], s:["biceps","hombro_posterior"] },
+  PULL_UP:          { p:["dorsal"], s:["biceps","hombro_posterior","core"] },
+  DEADLIFT:         { p:["espalda_baja","isquiotibial","gluteo"], s:["dorsal","core"] },
+  SQUAT:            { p:["cuadriceps","gluteo"], s:["core","isquiotibial"] },
+  LUNGE:            { p:["cuadriceps","gluteo"], s:["isquiotibial"] },
+  LEG_PRESS:        { p:["cuadriceps"], s:["gluteo"] },
+  LEG_EXTENSION:    { p:["cuadriceps"], s:[] },
+  LEG_CURL:         { p:["isquiotibial"], s:[] },
+  CALF_RAISE:       { p:["gemelo"], s:[] },
+  BICEP_CURL:       { p:["biceps"], s:[] },
+  TRICEP_EXTENSION: { p:["triceps"], s:[] },
+  DIP:              { p:["triceps","pecho"], s:["hombro_frontal"] },
+  PLANK:            { p:["core"], s:[] },
+  CRUNCH:           { p:["core"], s:[] },
+  CORE:             { p:["core"], s:[] },
+  CABLE_PULL:       { p:["dorsal"], s:["biceps"] },
 };
 const MUSCULOS_NOMBRE = {pecho:"Pecho",triceps:"Tríceps",biceps:"Bíceps",hombro_frontal:"Hombro (frontal)",hombro_lateral:"Hombro (lateral)",hombro_posterior:"Hombro (posterior)",espalda_alta:"Espalda alta",espalda_baja:"Espalda baja",dorsal:"Dorsal",gluteo:"Glúteo",cuadriceps:"Cuádriceps",isquiotibial:"Isquiotibial",gemelo:"Gemelo",core:"Core / abdomen"};
 const CATEGORIA_NOMBRE = {BENCH_PRESS:"Press banca",PUSH_UP:"Flexiones",SHOULDER_PRESS:"Press hombro",LATERAL_RAISE:"Elevación lateral",ROW:"Remo",LAT_PULLDOWN:"Jalón dorsal",PULL_UP:"Dominadas",DEADLIFT:"Peso muerto",SQUAT:"Sentadilla",LUNGE:"Zancada",LEG_PRESS:"Prensa piernas",LEG_EXTENSION:"Extensión cuádriceps",LEG_CURL:"Curl femoral",CALF_RAISE:"Elevación talones",BICEP_CURL:"Curl bíceps",TRICEP_EXTENSION:"Extensión tríceps",DIP:"Fondos",PLANK:"Plancha",CRUNCH:"Abdominales",CORE:"Core",CABLE_PULL:"Polea"};
 
-function diagramaCuerpo(musculosActivos){
-  // silueta simplificada frontal; cada region es una forma coloreable
-  const activo = (id)=> musculosActivos.has(id);
-  const col = (id)=> activo(id) ? css('--alba') : css('--borde');
+function diagramaCuerpo(primarios, secundarios){
+  // silueta esquematica frontal+posterior; 3 niveles, igual criterio visual que Garmin/Strava
+  const col = (id)=> primarios.has(id) ? css('--fc') : secundarios.has(id) ? css('--alba') : css('--borde');
   const region = (id, d) => `<path d="${d}" fill="${col(id)}" stroke="${css('--fondo')}" stroke-width="1.5"/>`;
   return `<svg viewBox="0 0 140 220" style="width:100%;max-width:180px;display:block;margin:8px auto">
     <ellipse cx="70" cy="18" rx="14" ry="16" fill="${css('--contorno')}"/>
@@ -579,7 +619,12 @@ function diagramaCuerpo(musculosActivos){
     ${region("gemelo","M54,162 L64,162 L62,196 L56,196 Z")}
     ${region("gemelo","M86,162 L76,162 L78,196 L84,196 Z")}
     <text x="70" y="212" text-anchor="middle" font-size="9" fill="${css('--suave')}">posterior (esquemático)</text>
-  </svg>`;
+  </svg>
+  <div style="display:flex;gap:14px;justify-content:center;font-size:11px;color:${css('--suave')}">
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${css('--fc')};margin-right:4px"></span>Primario</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${css('--alba')};margin-right:4px"></span>Secundario</span>
+    <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${css('--borde')};margin-right:4px"></span>No trabajado</span>
+  </div>`;
 }
 
 let filaSeq = 0;
@@ -804,6 +849,31 @@ $("bt-toggle").addEventListener("click", ()=>{
   $("bt-flecha").textContent = $("bt-panel").classList.contains("abierto") ? "▴" : "▾";
 });
 
+$("plan-toggle").addEventListener("click", ()=>{
+  $("plan-panel").classList.toggle("abierto");
+  $("plan-flecha").textContent = $("plan-panel").classList.contains("abierto") ? "▴" : "▾";
+});
+document.addEventListener("click", (e)=>{
+  const boton = e.target.closest(".plan-dia");
+  if (!boton) return;
+  const i = +boton.dataset.dia;
+  planDiasSel.has(i) ? planDiasSel.delete(i) : planDiasSel.add(i);
+  pintarPlanGym();
+});
+$("plan-guardar").addEventListener("click", async ()=>{
+  if (!planDiasSel.size){ $("plan-estado").textContent = "Marca al menos un día antes de guardar."; return; }
+  const dias = [...planDiasSel].sort((a,b)=>a-b);
+  const datos = { dias, dias_texto: dias.map(i=>DIAS_SEMANA[i]).join(", "), notas: $("plan-notas").value.trim() };
+  const ok = await guardarConDatos("plan-gym", datos, $("plan-estado"));
+  if (ok){
+    const pat = localStorage.getItem(KEY);
+    vigilarArchivo("app/historial-plan-gym.json", async ()=>{
+      PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
+      pintarPlanGym();
+    }, "Guardando plan… (unos segundos)", "Sigue en marcha — recarga en un momento");
+  }
+});
+
 let ultimoCalculoBT = null;
 function leerYCalcularBT(){
   const alt = BODY && BODY.profile && BODY.profile.userData && BODY.profile.userData.height;
@@ -860,6 +930,33 @@ $("bt-guardar").addEventListener("click", async ()=>{
     }, "Guardando medición… (unos segundos)", "Sigue en marcha — recarga en un momento");
   }
 });
+
+// ── plan de entrenamiento (Gym): mismo historial generico que Objetivos/Body Type ──
+let PLAN_GYM_HIST = null, planDiasSel = new Set();
+const DIAS_SEMANA = ["L","M","X","J","V","S","D"];
+function pintarPlanGym(){
+  $("plan-dias").innerHTML = DIAS_SEMANA.map((d,i)=>
+    `<button class="btn disp plan-dia ${planDiasSel.has(i)?"act":""}" data-dia="${i}">${d}</button>`).join("");
+  const hist = PLAN_GYM_HIST && PLAN_GYM_HIST.length ? PLAN_GYM_HIST : null;
+  if (hist){
+    const actual = hist[hist.length-1].datos;
+    $("plan-estado").textContent = "Plan actual: " + (actual.dias_texto||"sin días") + (actual.notas ? " — " + actual.notas : "") + " (guardado en tu repo)";
+  }
+  $("plan-historial").innerHTML = tablaHistorialHTML(hist||[], [["dias_texto","Días"],["notas","Notas"]]);
+}
+function pintarGym(){
+  const sesiones = (DATOS.activities||[]).filter(a=>esGym(a.type));
+  const fuerza = sesiones.filter(a=>(a.type||"").includes("strength"));
+  const natacion = sesiones.filter(a=>(a.type||"").includes("swim"));
+  const totalMin = Math.round(sesiones.reduce((s,a)=>s+(a.duration_s||0),0)/60);
+  const totalKcal = Math.round(sesiones.reduce((s,a)=>s+(a.calories||0),0));
+  $("gym-resumen").innerHTML = rejillaMetricas([
+    [null, "Sesiones (30 d)", sesiones.filter(a=>new Date((a.start_local||"1970").replace(" ","T")).getTime() > Date.now()-30*24*3600*1000).length, "", "", css('--alba')],
+    [null, "Fuerza / Natación", `${fuerza.length}`, `/ ${natacion.length}`, "", css('--sueno')],
+    [null, "Tiempo total", totalMin, "min", "", css('--hrv')],
+  ]);
+  $("gym-lista").innerHTML = sesiones.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin sesiones de gym o natación todavía.</p>';
+}
 
 function pintarSalud(){
   const ud = BODY && BODY.profile && BODY.profile.userData;
@@ -999,9 +1096,11 @@ function pintar(){
   $("run-kms").innerHTML = kmsHTML(runs);
   $("run-lista").innerHTML = runs.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin carreras aún.</p>';
   pintarRitmoRun(runs);
-  const varias = (DATOS.activities||[]).filter(a=>!esBici(a.type)&&!esRun(a.type));
+  const varias = (DATOS.activities||[]).filter(a=>!esBici(a.type)&&!esRun(a.type)&&!esGym(a.type));
   $("var-lista").innerHTML = varias.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin otras actividades.</p>';
   pintarCiclismo();
+  pintarGym();
+  pintarPlanGym();
   pintarSalud();
   pintarBodyType();
 
@@ -1131,8 +1230,13 @@ function seccionFuerza(id, meta){
   const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, series:e.series, reps:e.reps, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
   const manuales = ejerciciosGuardados(id).map(e=>({...e, origen:"manual"}));
   const todos = [...deGarmin, ...manuales];
-  const musculos = new Set();
-  todos.forEach(e=> (MUSCULOS[e.categoria]||[]).forEach(m=>musculos.add(m)));
+  const primarios = new Set(), secundarios = new Set();
+  todos.forEach(e=>{
+    const md = MUSCULOS_DETALLE[e.categoria];
+    if (!md) return;
+    md.p.forEach(m=>primarios.add(m));
+    md.s.forEach(m=>{ if (!primarios.has(m)) secundarios.add(m); });
+  });
 
   const opciones = Object.keys(CATEGORIA_NOMBRE).map(c=>`<option value="${c}">${CATEGORIA_NOMBRE[c]}</option>`).join("");
   let html = `<section class="tarjeta"><h2 class="disp">Ejercicios</h2>`;
@@ -1157,8 +1261,9 @@ function seccionFuerza(id, meta){
       <button class="boton disp" style="margin-top:8px" data-addej="${id}">+ Añadir</button>
     </div>
   </section>`;
-  if (musculos.size) html += `<section class="tarjeta"><h2 class="disp">Músculos trabajados</h2>${diagramaCuerpo(musculos)}
-    <p class="sub" style="text-align:center">${[...musculos].map(m=>MUSCULOS_NOMBRE[m]||m).join(" · ")}</p></section>`;
+  const totalMusculos = primarios.size + secundarios.size;
+  if (totalMusculos) html += `<section class="tarjeta"><h2 class="disp">Músculos trabajados</h2>${diagramaCuerpo(primarios, secundarios)}
+    <p class="sub" style="text-align:center;margin-top:6px">Primario: ${[...primarios].map(m=>MUSCULOS_NOMBRE[m]||m).join(", ")||"—"}<br>Secundario: ${[...secundarios].map(m=>MUSCULOS_NOMBRE[m]||m).join(", ")||"—"}</p></section>`;
   return html;
 }
 
