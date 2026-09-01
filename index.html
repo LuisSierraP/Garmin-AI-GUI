@@ -1124,15 +1124,16 @@ function lunesDeSemana(d){
   const l = new Date(d); l.setDate(d.getDate()-dia); l.setHours(0,0,0,0);
   return l;
 }
-let semanaOffset = 0; // 0 = semana actual, -1 = semana pasada, etc.
+let semanaOffset = 0; // 0 = ultimos 7 dias hasta hoy, -1 = los 7 dias anteriores a esos, etc.
 function cargaMuscularSemana(offset){
-  const lunes = lunesDeSemana(new Date());
-  lunes.setDate(lunes.getDate() + offset*7);
-  const domingo = new Date(lunes); domingo.setDate(lunes.getDate()+7);
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const finBloque = new Date(hoy); finBloque.setDate(hoy.getDate() + offset*7); // ultimo dia del bloque de 7
+  const inicioBloque = new Date(finBloque); inicioBloque.setDate(finBloque.getDate()-6); // 7 dias exactos, rodante -- NO semana de calendario
+  const finExclusivo = new Date(finBloque); finExclusivo.setDate(finBloque.getDate()+1);
   const sesiones = (DATOS.activities||[]).filter(a=>{
     if (!(a.type||"").includes("strength")) return false;
     const f = new Date((a.start_local||"1970").replace(" ","T"));
-    return f>=lunes && f<domingo;
+    return f>=inicioBloque && f<finExclusivo;
   });
   const cargaP = {}, cargaS = {};
   sesiones.forEach(a=>{
@@ -1144,7 +1145,7 @@ function cargaMuscularSemana(offset){
       md.s.forEach(m=>{ if (!md.p.includes(m)) cargaS[m] = (cargaS[m]||0) + peso; });
     });
   });
-  return { cargaP, cargaS, nSesiones: sesiones.length, lunes, domingo };
+  return { cargaP, cargaS, nSesiones: sesiones.length, lunes: inicioBloque, domingo: finExclusivo };
 }
 function fRangoSemana(lunes, domingo){
   const fin = new Date(domingo); fin.setDate(fin.getDate()-1);
@@ -1189,7 +1190,7 @@ function diagramaCargaSemanal(cargaP, cargaS){
 
 function pintarGym(){
   const { cargaP, cargaS, nSesiones, lunes, domingo } = cargaMuscularSemana(semanaOffset);
-  $("semana-rango").textContent = semanaOffset===0 ? "esta semana" : fRangoSemana(lunes, domingo);
+  $("semana-rango").textContent = semanaOffset===0 ? "últimos 7 días" : fRangoSemana(lunes, domingo);
   $("semana-next").disabled = semanaOffset>=0;
   $("semana-next").style.opacity = semanaOffset>=0 ? .4 : 1;
   $("gym-mapa-semana").innerHTML = nSesiones
@@ -1476,6 +1477,28 @@ function guardarEjercicio(id, ej){
   localStorage.setItem(`ejercicios_${id}`, JSON.stringify(l));
 }
 
+// Emoji de equipo/ejercicio, derivado de la subcategoria real (mas preciso que uno fijo por categoria,
+// porque un mismo ejercicio -ej. Remo- puede hacerse con mancuerna, cable o el propio peso).
+const CATEGORIA_EMOJI_RESPALDO = {
+  BENCH_PRESS:"🪑", ROW:"🚣", INDOOR_BIKE:"🚴", CABLE_PULL:"🔗",
+  PUSH_UP:"🤸", PULL_UP:"🤸", PLANK:"🤸", CRUNCH:"🤸", CORE:"🤸",
+  SHOULDER_PRESS:"🏋️", LATERAL_RAISE:"🏋️", LAT_PULLDOWN:"🏋️",
+  DEADLIFT:"🏋️", SQUAT:"🏋️", LUNGE:"🏋️", LEG_PRESS:"🛠️",
+  LEG_EXTENSION:"🛠️", LEG_CURL:"🛠️", CALF_RAISE:"🏋️",
+  CURL:"🏋️", TRICEP_EXTENSION:"🏋️", DIP:"🤸", SHRUG:"🏋️",
+};
+function emojiEjercicio(categoria, subcategoria){
+  const s = (subcategoria||"").toUpperCase();
+  if (s.includes("DUMBBELL")||s.includes("BARBELL")||s.includes("KETTLEBELL")||s.includes("PLATE")) return "🏋️";
+  if (s.includes("BAND")) return "🟦";
+  if (s.includes("CABLE")) return "🔗";
+  if (s.includes("SWISS")||s.includes("BALL")) return "⚽";
+  if (s.includes("BENCH")) return "🪑";
+  if (s.includes("ROPE")) return "🪢";
+  if (s.includes("MACHINE")||s.includes("SMITH")) return "🛠️";
+  return CATEGORIA_EMOJI_RESPALDO[(categoria||"").toUpperCase()] || "🏋️";
+}
+
 function seccionFuerza(id, meta){
   const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, subcategoria:e.subcategoria, ejercicio:e.ejercicio, series:e.series, reps:e.reps, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
   const manuales = ejerciciosGuardados(id).map(e=>({...e, origen:"manual"}));
@@ -1495,7 +1518,8 @@ function seccionFuerza(id, meta){
       const nombreSub = e.subcategoria ? e.subcategoria.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()) : null;
       const nombre = e.ejercicio || nombreSub || CATEGORIA_NOMBRE[e.categoria] || e.categoria || "Ejercicio";
       const partes = [e.series?`${e.series} serie${e.series>1?"s":""}`:null, e.reps?`${e.reps} reps`:null, e.peso?`${e.peso} kg`:null].filter(Boolean).join(" · ");
-      return `<div class="fila">${nombre}${partes?" — "+partes:""} <span class="sub">(${e.origen})</span></div>`;
+      const emo = emojiEjercicio(e.categoria, e.subcategoria);
+      return `<div class="fila">${emo} ${nombre}${partes?" — "+partes:""} <span class="sub">(${e.origen})</span></div>`;
     }).join("") + `</div>`;
   } else {
     html += `<p class="sub">Sin ejercicios registrados todavía.</p>`;
