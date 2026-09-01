@@ -205,12 +205,17 @@ canvas{max-width:100%}
       </section>
 
       <section class="tarjeta">
-        <div class="cab" style="align-items:center">
+        <div class="cab" style="align-items:center;cursor:pointer" id="programa-toggle">
           <h2 class="disp">Programa de entrenamiento</h2>
-          <span class="sub" id="programa-ciclo"></span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="sub" id="programa-ciclo"></span>
+            <span class="btn disp" id="programa-flecha">▾</span>
+          </div>
         </div>
-        <div id="programa-dias-tabs" style="display:flex;gap:6px;margin:10px 0"></div>
-        <div id="programa-contenido"></div>
+        <div class="expandible" id="programa-panel">
+          <div id="programa-dias-tabs" style="display:flex;gap:6px;margin:10px 0"></div>
+          <div id="programa-contenido"></div>
+        </div>
       </section>
 
       <section class="tarjeta"><h2 class="disp">Resumen</h2><div class="grid3" id="gym-resumen"></div></section>
@@ -1104,6 +1109,11 @@ $("semana-next").addEventListener("click", ()=>{ if (semanaOffset<0){ semanaOffs
 $("bt-toggle").addEventListener("click", ()=>{
   $("bt-panel").classList.toggle("abierto");
   $("bt-flecha").textContent = $("bt-panel").classList.contains("abierto") ? "▴" : "▾";
+});
+
+$("programa-toggle").addEventListener("click", ()=>{
+  $("programa-panel").classList.toggle("abierto");
+  $("programa-flecha").textContent = $("programa-panel").classList.contains("abierto") ? "▴" : "▾";
 });
 
 $("plan-toggle").addEventListener("click", ()=>{
