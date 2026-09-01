@@ -759,7 +759,7 @@ async function cargarEjerciciosGarmin(pat){
       return "hombro_frontal";
     };
     Object.entries(datos.categorias).forEach(([cat, lista])=>{
-      lista.forEach(([nombreEj, pc, sc])=>{
+      lista.forEach(([idEj, nombreEj, pc, sc])=>{
         const traducir = (codigos, excluir) => [...new Set(codigos.map(c=>{
           const nombreGarmin = CODIGO_INV[c];
           if (nombreGarmin === "SHOULDERS") return traducirHombro(nombreEj);
@@ -1070,7 +1070,9 @@ document.addEventListener("click", (e)=>{
     const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
     const ej = dia.ejercicios[idx];
     const musculo = ej.musculo_principal;
-    const candidatos = (INDICE_MUSCULO_EJERCICIO[musculo]||[]).map(x=>x.ejercicio).filter(n=>n!==ej.ejercicio);
+    const candidatos = (INDICE_MUSCULO_EJERCICIO[musculo]||[])
+      .map(x=>ID_A_NOMBRE_EJERCICIO[x.id_ejercicio])
+      .filter(n=>n && n!==ej.ejercicio);
     if (!candidatos.length){ alert("No encontré otra alternativa real para este músculo."); return; }
     ej.ejercicio = candidatos[Math.floor(Math.random()*candidatos.length)];
     pintarPrograma();
@@ -1205,10 +1207,16 @@ const DIAS_SEMANA = ["L","M","X","J","V","S","D"];
 let PROGRAMA_GYM = null, diaProgramaActivo = 1;
 
 let INDICE_MUSCULO_EJERCICIO = null;
+let ID_A_NOMBRE_EJERCICIO = {};
 async function cargarIndiceMusculoEjercicio(pat){
   try{
     const r = await fetchRepo('contents/app/gym-db/indice-musculo-ejercicio.json', { pat });
     INDICE_MUSCULO_EJERCICIO = r.ok ? (await r.json()).musculo_a_ejercicios : {};
+    const r2 = await fetchRepo('contents/app/gym-db/ejercicios-freeexercisedb.json', { pat });
+    if (r2.ok){
+      const fe = await r2.json();
+      fe.ejercicios.forEach(([id, nombre])=>{ ID_A_NOMBRE_EJERCICIO[id] = nombre; });
+    }
   }catch(e){ INDICE_MUSCULO_EJERCICIO = {}; }
 }
 async function cargarProgramaGym(pat){
