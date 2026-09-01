@@ -189,24 +189,8 @@ canvas{max-width:100%}
     <!-- ══════════ TAB GYM ══════════ -->
     <div id="tab-gym" class="oculto">
       <section class="tarjeta">
-        <div class="cab" style="cursor:pointer" id="plan-toggle">
-          <h2 class="disp">Plan de entrenamiento</h2>
-          <span class="btn disp" id="plan-flecha">▾</span>
-        </div>
-        <div class="expandible" id="plan-panel">
-          <p class="sub" style="margin:10px 0">Marca tus días de gym (recomendado: 3 a la semana).</p>
-          <div id="plan-dias" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-          <input id="plan-notas" type="text" placeholder="Notas del plan (opcional)" style="margin-top:10px">
-          <button id="plan-guardar" class="boton disp" style="margin-top:10px">Guardar plan</button>
-          <p id="plan-estado" class="sub" style="margin:8px 0 0"></p>
-          <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Historial de planes</p>
-          <div id="plan-historial"></div>
-        </div>
-      </section>
-
-      <section class="tarjeta">
         <div class="cab" style="align-items:center;cursor:pointer" id="programa-toggle">
-          <h2 class="disp">Programa de entrenamiento</h2>
+          <h2 class="disp">Plan de entrenamiento</h2>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="sub" id="programa-ciclo"></span>
             <span class="btn disp" id="programa-flecha">▾</span>
@@ -459,7 +443,6 @@ async function cargar(pat){
   await cargarBody(pat);
   OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
   BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
-  PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
   await cargarProgramaGym(pat);
   await cargarIndiceMusculoEjercicio(pat);
   await cargarDatosGeneracion(pat);
@@ -1081,10 +1064,29 @@ document.addEventListener("click", (e)=>{
   }
 
   const btnExtra = e.target.closest("#programa-dia-extra");
-  if (btnExtra){
-    const nuevoDia = generarDiaExtra();
+  if (btnExtra){ mostrarPopupIntensidad(); return; }
+
+  const btnIntensidad = e.target.closest(".btn-intensidad");
+  if (btnIntensidad){
+    const nuevoDia = generarDiaExtra(btnIntensidad.dataset.nivel);
     PROGRAMA_GYM.dias.push(nuevoDia);
     diaProgramaActivo = nuevoDia.dia;
+    guardarConDatos("programa-gym", PROGRAMA_GYM, null);
+    $("popup-intensidad-fondo").remove();
+    pintarPrograma();
+    return;
+  }
+  if (e.target.id==="popup-intensidad-fondo"){ $("popup-intensidad-fondo").remove(); return; }
+
+  const btnAgregar = e.target.closest("#agregar-ejercicio-btn");
+  if (btnAgregar){
+    const musculo = $("agregar-musculo-select").value;
+    const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
+    const yaUsados = new Set(dia.ejercicios.map(ej=>ej.ejercicio));
+    const candidatos = (CANDIDATOS_ESTANDAR[musculo]||[]).filter(id=>FE_COMPLETO[id] && !yaUsados.has(FE_COMPLETO[id].nombre));
+    if (!candidatos.length){ alert("No encontré un ejercicio nuevo para ese músculo que no esté ya en el día."); return; }
+    const id = candidatos[Math.floor(Math.random()*candidatos.length)];
+    dia.ejercicios.push({ patron: musculo, musculo_principal: musculo, ejercicio: FE_COMPLETO[id].nombre, series: 3, reps: "12-15" });
     guardarConDatos("programa-gym", PROGRAMA_GYM, null);
     pintarPrograma();
     return;
@@ -1127,31 +1129,6 @@ $("bt-toggle").addEventListener("click", ()=>{
 $("programa-toggle").addEventListener("click", ()=>{
   $("programa-panel").classList.toggle("abierto");
   $("programa-flecha").textContent = $("programa-panel").classList.contains("abierto") ? "▴" : "▾";
-});
-
-$("plan-toggle").addEventListener("click", ()=>{
-  $("plan-panel").classList.toggle("abierto");
-  $("plan-flecha").textContent = $("plan-panel").classList.contains("abierto") ? "▴" : "▾";
-});
-document.addEventListener("click", (e)=>{
-  const boton = e.target.closest(".plan-dia");
-  if (!boton) return;
-  const i = +boton.dataset.dia;
-  planDiasSel.has(i) ? planDiasSel.delete(i) : planDiasSel.add(i);
-  pintarPlanGym();
-});
-$("plan-guardar").addEventListener("click", async ()=>{
-  if (!planDiasSel.size){ $("plan-estado").textContent = "Marca al menos un día antes de guardar."; return; }
-  const dias = [...planDiasSel].sort((a,b)=>a-b);
-  const datos = { dias, dias_texto: dias.map(i=>DIAS_SEMANA[i]).join(", "), notas: $("plan-notas").value.trim() };
-  const ok = await guardarConDatos("plan-gym", datos, $("plan-estado"));
-  if (ok){
-    const pat = localStorage.getItem(KEY);
-    vigilarArchivo("app/usuarios/luis/historial-plan-gym.json", async ()=>{
-      PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
-      pintarPlanGym();
-    }, "Guardando plan… (unos segundos)", "Sigue en marcha — recarga en un momento");
-  }
 });
 
 let ultimoCalculoBT = null;
@@ -1212,7 +1189,6 @@ $("bt-guardar").addEventListener("click", async ()=>{
 });
 
 // ── plan de entrenamiento (Gym): mismo historial generico que Objetivos/Body Type ──
-let PLAN_GYM_HIST = null, planDiasSel = new Set();
 const DIAS_SEMANA = ["L","M","X","J","V","S","D"];
 // ── Programa de entrenamiento: carga desde historial-programa-gym, pinta por dia ──
 let PROGRAMA_GYM = null, diaProgramaActivo = 1;
@@ -1244,8 +1220,8 @@ async function cargarDatosGeneracion(pat){
     if (r1.ok){
       const fe = await r1.json();
       const CODIGO_INV = {}; Object.entries(fe._codigo_musculos).forEach(([n,c])=>{ CODIGO_INV[c]=n; });
-      fe.ejercicios.forEach(([id,nombre,pc,sc])=>{
-        FE_COMPLETO[id] = { nombre, primarios: pc.map(c=>CODIGO_INV[c]), secundarios: sc.map(c=>CODIGO_INV[c]) };
+      fe.ejercicios.forEach(([id,nombre,pc,sc,equipo])=>{
+        FE_COMPLETO[id] = { nombre, primarios: pc.map(c=>CODIGO_INV[c]), secundarios: sc.map(c=>CODIGO_INV[c]), equipo };
       });
     }
     const r2 = await fetchRepo('contents/app/gym-db/musculos.json', { pat });
@@ -1293,26 +1269,70 @@ function calcularCargaDesdeHistorial(){
   return p;
 }
 
-function generarDiaExtra(){
+const INTENSIDADES = {
+  suave:  { series:2, reps:"15-20", equipoPreferido:["machine","body only"], enfoque:"Full body (día extra) — Suave 🌿" },
+  firme:  { series:3, reps:"12-15", equipoPreferido:null, enfoque:"Full body (día extra) — Firme 💪" },
+  bestia: { series:4, reps:"8-10", equipoPreferido:["barbell","dumbbell"], enfoque:"Full body (día extra) — Bestia 🔥" },
+};
+
+const NOMBRES_INTENSIDAD = { suave: "🌿 Suave", firme: "💪 Firme", bestia: "🔥 Bestia" };
+function mostrarPopupIntensidad(){
+  const recomendada = recomendarIntensidad();
+  const NEON = "#39FF14";
+  const botones = Object.entries(NOMBRES_INTENSIDAD).map(([nivel, etiqueta])=>{
+    const esRecomendada = nivel===recomendada;
+    const estilo = esRecomendada
+      ? `border:2px solid ${NEON};box-shadow:0 0 10px ${NEON};color:${NEON}`
+      : `border:1px solid ${css('--borde')}`;
+    return `<button class="btn-intensidad disp" data-nivel="${nivel}" style="${estilo};padding:14px;border-radius:12px;font-size:15px;width:100%;margin-bottom:8px;background:${css('--tarjeta')}">
+      ${etiqueta}${esRecomendada?' <span style="font-size:11px">— recomendada hoy</span>':''}
+    </button>`;
+  }).join("");
+  const html = `<div id="popup-intensidad-fondo" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:center;justify-content:center">
+    <div id="popup-intensidad" style="background:${css('--fondo')};border-radius:16px;padding:20px;width:85%;max-width:340px">
+      <h3 class="disp" style="margin:0 0 4px">¿Qué intensidad hoy?</h3>
+      <p class="sub" style="margin:0 0 14px">Recomendada según tu preparación de hoy.</p>
+      ${botones}
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML("beforeend", html);
+}
+
+function recomendarIntensidad(){
+  const hoy = DATOS.wellness[DATOS.wellness.length-1];
+  const r = hoy && hoy.training_readiness;
+  if (r==null) return "firme";
+  if (r>=70) return "bestia";
+  if (r>=40) return "firme";
+  return "suave";
+}
+
+function generarDiaExtra(nivel){
+  const conf = INTENSIDADES[nivel] || INTENSIDADES.firme;
   const puntaje = calcularCargaDesdeHistorial();
   const musculosObjetivo = Object.keys(CANDIDATOS_ESTANDAR);
   const usadosHoy = new Set();
   const ejercicios = [];
   for (let i=0; i<7; i++){
     const peor = musculosObjetivo.reduce((a,b)=> (puntaje[b]||0) < (puntaje[a]||0) ? b : a);
-    const pool = (CANDIDATOS_ESTANDAR[peor]||[]).filter(id=>!usadosHoy.has(id));
+    let pool = (CANDIDATOS_ESTANDAR[peor]||[]).filter(id=>!usadosHoy.has(id));
+    if (conf.equipoPreferido){
+      const preferidos = pool.filter(id => conf.equipoPreferido.includes(FE_COMPLETO[id] && FE_COMPLETO[id].equipo));
+      if (preferidos.length) pool = preferidos;
+    }
     const id = (pool.length ? pool : (CANDIDATOS_ESTANDAR[peor]||[]))[0];
     if (!id) continue;
     usadosHoy.add(id);
     puntajeEjercicio(id, puntaje);
     const ex = FE_COMPLETO[id];
-    ejercicios.push({ patron: peor, musculo_principal: peor, ejercicio: ex.nombre, series: 3, reps: "12-15" });
+    ejercicios.push({ patron: peor, musculo_principal: peor, ejercicio: ex.nombre, series: conf.series, reps: conf.reps });
   }
   return {
     dia: PROGRAMA_GYM.dias.length + 1,
-    enfoque: "Full body (día extra)",
+    enfoque: conf.enfoque,
     calentamiento: PROGRAMA_GYM.dias[0].calentamiento,
     ejercicios,
+
   };
 }
 
@@ -1363,6 +1383,12 @@ function pintarPrograma(){
     <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Entrenamiento — ${dia.enfoque}</p>
     ${ejercicios}
     <p class="sub" style="margin-top:8px">Toca 🔄 para cambiar un ejercicio por otro que trabaje el mismo músculo.</p>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <select id="agregar-musculo-select" class="disp" style="flex:1">
+        ${Object.keys(CANDIDATOS_ESTANDAR).map(m=>`<option value="${m}">${MUSCULOS_NOMBRE[m]||m}</option>`).join("")}
+      </select>
+      <button id="agregar-ejercicio-btn" class="btn disp">+ Añadir</button>
+    </div>
     <button id="programa-completado" class="boton disp" style="margin-top:12px;width:100%" ${todosMarcados?"":"disabled"}>
       ${todosMarcados ? "✓ Marcar entrenamiento completado" : `Marca los ${dia.ejercicios.length} ejercicios para completar`}
     </button>
@@ -1378,16 +1404,6 @@ function pintarPrograma(){
   }
 }
 
-function pintarPlanGym(){
-  $("plan-dias").innerHTML = DIAS_SEMANA.map((d,i)=>
-    `<button class="btn disp plan-dia ${planDiasSel.has(i)?"act":""}" data-dia="${i}">${d}</button>`).join("");
-  const hist = PLAN_GYM_HIST && PLAN_GYM_HIST.length ? PLAN_GYM_HIST : null;
-  if (hist){
-    const actual = hist[hist.length-1].datos;
-    $("plan-estado").textContent = "Plan actual: " + (actual.dias_texto||"sin días") + (actual.notas ? " — " + actual.notas : "") + " (guardado en tu repo)";
-  }
-  $("plan-historial").innerHTML = tablaHistorialHTML(hist||[], [["dias_texto","Días"],["notas","Notas"]]);
-}
 // ── carga muscular de la semana calendario (lunes a domingo) ──
 function lunesDeSemana(d){
   const dia = (d.getDay()+6)%7; // lunes=0
@@ -1630,7 +1646,6 @@ function pintar(){
   $("var-lista").innerHTML = varias.slice(0,30).map(a=>filaAct(a)).join("") || '<p class="sub">Sin otras actividades.</p>';
   pintarCiclismo();
   pintarGym();
-  pintarPlanGym();
   pintarSalud();
   pintarBodyType();
 
