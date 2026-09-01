@@ -619,35 +619,16 @@ function pintarSueno(n){
           external: (ctx) => tooltipSuenoHTML(ctx, w),
         },
       },
-      onClick: (evt, elems) => {
-        if (!elems.length || n!==30) return; // en semana, solo la etiqueta abre el dia; aqui solo mes->semana
-        const idxEnW = elems[0].index;
-        const diaObj = w[idxEnW];
-        if (!diaObj) return;
-        suenoSemanaAncla = lunesDe(new Date(diaObj.day+"T12:00:00"));
-        document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
-        document.querySelector('.rangoS[data-n="7"]').classList.add("act");
-        pintarSueno(7);
-      },
       scales:{ x:{ ...baseOpts().scales.x, stacked:true, ticks:{...baseOpts().scales.x.ticks, maxTicksLimit: n>10?8:7} }, y:{ ...baseOpts("h").scales.y, stacked:true } } } });
 }
 
-let tooltipDiaIdx = null;
+let tooltipDiaIdx = null; // dia seleccionado (tocando una barra) -- lo consumen los botones dia/semana
 function tooltipSuenoHTML(context, w){
   let el = document.getElementById("sueno-tooltip-html");
   if (!el){
     el = document.createElement("div");
     el.id = "sueno-tooltip-html";
-    el.style.cssText = `position:absolute;pointer-events:none;opacity:0;cursor:pointer;background:${css('--tarjeta')};border:1px solid ${css('--alba')};border-radius:10px;padding:8px 10px;font-size:12px;color:${css('--tinta')};line-height:1.5;z-index:20;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:opacity .1s`;
-    el.addEventListener("click", ()=>{
-      if (tooltipDiaIdx==null) return;
-      suenoDiaOffset = tooltipDiaIdx - (DATOS.wellness.length - 1);
-      el.style.opacity = 0;
-      el.style.pointerEvents = "none";
-      document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
-      document.querySelector('.rangoS[data-n="1"]').classList.add("act");
-      pintarSueno(1);
-    });
+    el.style.cssText = `position:absolute;pointer-events:none;opacity:0;background:${css('--tarjeta')};border:1px solid ${css('--alba')};border-radius:10px;padding:8px 10px;font-size:12px;color:${css('--tinta')};line-height:1.5;z-index:20;box-shadow:0 4px 14px rgba(0,0,0,.35);transition:opacity .1s`;
     context.chart.canvas.parentNode.style.position = "relative";
     context.chart.canvas.parentNode.appendChild(el);
   }
@@ -666,9 +647,8 @@ function tooltipSuenoHTML(context, w){
   if (diaObj.sleep_light_s!=null) partes.push(`Ligero: ${horas(diaObj.sleep_light_s)} h`);
   if (diaObj.sleep_rem_s!=null) partes.push(`REM: ${horas(diaObj.sleep_rem_s)} h`);
   const total = horas(diaObj.sleep_seconds);
-  el.innerHTML = `<b>${fDia(diaObj.day)}</b><br>${partes.join("<br>")||"Sin desglose"}${total!=null?`<br>Total: ${total} h`:""}<br><span style="color:${css('--suave')};font-size:10px">toca aquí para ver el detalle</span>`;
+  el.innerHTML = `<b>${fDia(diaObj.day)}</b><br>${partes.join("<br>")||"Sin desglose"}${total!=null?`<br>Total: ${total} h`:""}<br><span style="color:${css('--suave')};font-size:10px">seleccionado — toca "día" o "semana" arriba para abrirlo</span>`;
   el.style.opacity = 1;
-  el.style.pointerEvents = "auto";
   el.style.left = context.chart.canvas.offsetLeft + tooltip.caretX + "px";
   el.style.top = context.chart.canvas.offsetTop + tooltip.caretY + "px";
 }
@@ -1716,7 +1696,22 @@ $("fallo-llave").addEventListener("click", ()=>{ localStorage.removeItem(KEY); p
 $("obj-guardar").addEventListener("click", guardarObjetivosRemoto);
 document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("rango")){ document.querySelectorAll(".rango").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); pintarTrend(+e.target.dataset.n); }
-  if (e.target.classList.contains("rangoS")){ document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act")); e.target.classList.add("act"); suenoDiaOffset=0; suenoSemanaAncla=null; pintarSueno(+e.target.dataset.n); }
+  if (e.target.classList.contains("rangoS")){
+    document.querySelectorAll(".rangoS").forEach(b=>b.classList.remove("act"));
+    e.target.classList.add("act");
+    const n = +e.target.dataset.n;
+    if (n===1){
+      if (tooltipDiaIdx!=null){ suenoDiaOffset = tooltipDiaIdx - (DATOS.wellness.length - 1); tooltipDiaIdx = null; }
+      else { suenoDiaOffset = 0; }
+    } else if (n===7){
+      if (tooltipDiaIdx!=null){
+        suenoSemanaAncla = lunesDe(new Date(DATOS.wellness[tooltipDiaIdx].day+"T12:00:00"));
+        tooltipDiaIdx = null;
+      } else { suenoSemanaAncla = null; }
+      suenoDiaOffset = 0;
+    } else { suenoDiaOffset = 0; suenoSemanaAncla = null; }
+    pintarSueno(n);
+  }
   if (e.target.classList.contains("fbici")){ filtroBici = e.target.dataset.t; pintarCiclismo(); }
   if (e.target.classList.contains("fgear")){ filtroGear = e.target.dataset.g; pintarCiclismo(); }
   if (e.target.classList.contains("tabbtn")){
