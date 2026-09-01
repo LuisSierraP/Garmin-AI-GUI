@@ -445,6 +445,7 @@ async function cargar(pat){
   OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
   BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
   PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
+  await cargarEjerciciosGarmin(pat);
   renderTabs();
   pintar();
   pantalla("panel");
@@ -735,9 +736,54 @@ function kmsHTML(acts){
 // Mapeo fino, prioritario: por SUBCATEGORIA exacta de Garmin (ej. el
 // ejercicio real, no solo la categoria general). Se completa poco a poco,
 // verificado contra la tabla oficial -- nunca se inventa una entrada.
-const MUSCULOS_POR_SUBCATEGORIA = {
-  WEIGHTED_GHD_BACK_EXTENSIONS: { p:["espalda_baja"], s:[] }, // CONFIRMADO otra vez: Garmin oficial "Weighted Ghd Back Extensions" = solo LOWER_BACK, sin secundario (mismo dato para la version sin peso)
+// ── Base de datos completa de ejercicios (1510, oficial Garmin) reemplaza el mapeo manual ──
+// Traduce el codigo de musculo de Garmin (workouts.json condensado) a mi taxonomia interna.
+const GARMIN_A_MIO = {
+  ABS:"core", OBLIQUES:"oblicuos", QUADS:"cuadriceps", HAMSTRINGS:"isquiotibial",
+  GLUTES:"gluteo", CALVES:"gemelo", ADDUCTORS:"cuadriceps", ABDUCTORS:"gluteo",
+  HIPS:"core", BICEPS:"biceps", TRICEPS:"triceps", SHOULDERS:"hombro_frontal",
+  CHEST:"pecho", LOWER_BACK:"espalda_baja", LATS:"dorsal", TRAPS:"espalda_alta", FOREARM:"antebrazo",
 };
+let EJERCICIOS_GARMIN = null; // lookup plano: "CATEGORIA::SUBCATEGORIA" -> {p:[...], s:[...]}
+async function cargarEjerciciosGarmin(pat){
+  try{
+    const r = await fetchRepo('contents/app/ejercicios-garmin-completo.json', { pat });
+    if (!r.ok){ EJERCICIOS_GARMIN = {}; return; }
+    const datos = await r.json();
+    const CODIGO_INV = {}; Object.entries(datos._codigo_musculos).forEach(([nombre,cod])=>{ CODIGO_INV[cod]=nombre; });
+    const lookup = {};
+    // Garmin no distingue frontal/lateral/posterior en "SHOULDERS" -- lo infiero del
+    // propio nombre del ejercicio (ej. "LATERAL_RAISE" contiene "LATERAL"), cayendo a
+    // frontal solo si el nombre no da ninguna pista. Sin esto se perdia precision que
+    // si tenia el mapeo manual anterior para casos como elevacion lateral.
+    const traducirHombro = (nombreEj) => {
+      if (/LATERAL/.test(nombreEj)) return "hombro_lateral";
+      if (/REAR|POSTERIOR|REVERSE/.test(nombreEj)) return "hombro_posterior";
+      return "hombro_frontal";
+    };
+    Object.entries(datos.categorias).forEach(([cat, lista])=>{
+      lista.forEach(([nombreEj, pc, sc])=>{
+        const traducir = (codigos, excluir) => [...new Set(codigos.map(c=>{
+          const nombreGarmin = CODIGO_INV[c];
+          if (nombreGarmin === "SHOULDERS") return traducirHombro(nombreEj);
+          return GARMIN_A_MIO[nombreGarmin];
+        }).filter(Boolean).filter(m=>!excluir || !excluir.includes(m)))];
+        const p = traducir(pc);
+        const s = traducir(sc, p);
+        lookup[`${cat}::${nombreEj}`] = { p, s };
+      });
+    });
+    EJERCICIOS_GARMIN = lookup;
+  }catch(e){ EJERCICIOS_GARMIN = {}; }
+}
+// Fuente principal: base completa por subcategoria exacta. Respaldo: categoria general (MUSCULOS_DETALLE).
+function buscarMusculos(categoria, subcategoria){
+  if (EJERCICIOS_GARMIN && subcategoria){
+    const exacto = EJERCICIOS_GARMIN[`${categoria}::${subcategoria}`];
+    if (exacto) return exacto;
+  }
+  return MUSCULOS_DETALLE[categoria];
+}
 
 const MUSCULOS_DETALLE = {
   BENCH_PRESS:      { p:["pecho"], s:["triceps","hombro_frontal"] }, // verificado: CHEST primario, SHOULDERS+TRICEPS secundario (Garmin no distingue que parte del hombro)
@@ -1043,6 +1089,7 @@ $("plan-guardar").addEventListener("click", async ()=>{
     const pat = localStorage.getItem(KEY);
     vigilarArchivo("app/historial-plan-gym.json", async ()=>{
       PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
+  await cargarEjerciciosGarmin(pat);
       pintarPlanGym();
     }, "Guardando plan… (unos segundos)", "Sigue en marcha — recarga en un momento");
   }
@@ -1138,7 +1185,7 @@ function cargaMuscularSemana(offset){
   const cargaP = {}, cargaS = {};
   sesiones.forEach(a=>{
     (a.exercise_sets||[]).forEach(e=>{
-      const md = MUSCULOS_POR_SUBCATEGORIA[e.subcategoria] || MUSCULOS_DETALLE[e.categoria];
+      const md = buscarMusculos(e.categoria, e.subcategoria);
       if (!md) return;
       const peso = e.series || 1;
       md.p.forEach(m=>{ cargaP[m] = (cargaP[m]||0) + peso; });
@@ -1505,7 +1552,7 @@ function seccionFuerza(id, meta){
   const todos = [...deGarmin, ...manuales];
   const primarios = new Set(), secundarios = new Set();
   todos.forEach(e=>{
-    const md = MUSCULOS_POR_SUBCATEGORIA[e.subcategoria] || MUSCULOS_DETALLE[e.categoria];
+    const md = buscarMusculos(e.categoria, e.subcategoria);
     if (!md) return;
     md.p.forEach(m=>primarios.add(m));
     md.s.forEach(m=>{ if (!primarios.has(m)) secundarios.add(m); });
