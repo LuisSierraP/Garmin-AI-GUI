@@ -43,6 +43,7 @@ input[type=password],input[type=number],input[type=text]{width:100%;padding:12px
 canvas{max-width:100%}
 .pie{font-size:12px;color:var(--suave);text-align:center;margin-top:18px}
 .oculto{display:none}
+.chk-ejercicio{accent-color:var(--alba);width:18px;height:18px;flex-shrink:0}
 .nota-tecnica{background:rgba(79,179,165,.08);border:1px solid var(--hrv);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:13px;display:flex;gap:8px;align-items:flex-start;color:var(--tinta)}
 .nota-version{background:rgba(240,169,74,.08);border:1px solid var(--alba);border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;display:flex;gap:8px;align-items:flex-start;color:var(--suave)}
 .nota-tecnica .ic, .nota-version .ic{flex-shrink:0}
@@ -1078,14 +1079,13 @@ document.addEventListener("click", (e)=>{
   }
   if (e.target.id==="popup-intensidad-fondo"){ $("popup-intensidad-fondo").remove(); return; }
 
-  const btnAgregar = e.target.closest("#agregar-ejercicio-btn");
-  if (btnAgregar){
-    const musculo = $("agregar-musculo-select").value;
+  const chipMusculo = e.target.closest(".chip-musculo");
+  if (chipMusculo){
+    const musculo = chipMusculo.dataset.musculo;
     const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
     const yaUsados = new Set(dia.ejercicios.map(ej=>ej.ejercicio));
-    const candidatos = (CANDIDATOS_ESTANDAR[musculo]||[]).filter(id=>FE_COMPLETO[id] && !yaUsados.has(FE_COMPLETO[id].nombre));
-    if (!candidatos.length){ alert("No encontré un ejercicio nuevo para ese músculo que no esté ya en el día."); return; }
-    const id = candidatos[Math.floor(Math.random()*candidatos.length)];
+    const id = elegirMejorEjercicio(musculo, yaUsados);
+    if (!id){ alert("No encontré un ejercicio nuevo para ese músculo que no esté ya en el día."); return; }
     dia.ejercicios.push({ patron: musculo, musculo_principal: musculo, ejercicio: FE_COMPLETO[id].nombre, series: 3, reps: "12-15" });
     guardarConDatos("programa-gym", PROGRAMA_GYM, null);
     pintarPrograma();
@@ -1220,8 +1220,8 @@ async function cargarDatosGeneracion(pat){
     if (r1.ok){
       const fe = await r1.json();
       const CODIGO_INV = {}; Object.entries(fe._codigo_musculos).forEach(([n,c])=>{ CODIGO_INV[c]=n; });
-      fe.ejercicios.forEach(([id,nombre,pc,sc,equipo])=>{
-        FE_COMPLETO[id] = { nombre, primarios: pc.map(c=>CODIGO_INV[c]), secundarios: sc.map(c=>CODIGO_INV[c]), equipo };
+      fe.ejercicios.forEach(([id,nombre,pc,sc,equipo,mecanica])=>{
+        FE_COMPLETO[id] = { nombre, primarios: pc.map(c=>CODIGO_INV[c]), secundarios: sc.map(c=>CODIGO_INV[c]), equipo, mecanica };
       });
     }
     const r2 = await fetchRepo('contents/app/gym-db/musculos.json', { pat });
@@ -1298,12 +1298,124 @@ function mostrarPopupIntensidad(){
   document.body.insertAdjacentHTML("beforeend", html);
 }
 
+// ── Algoritmo de intensidad: sistema de puntuacion multi-factor, no un solo umbral.
+// Basado en conceptos reales de ciencia del deporte: ACWR (relacion carga aguda:cronica,
+// Banister/Gabbett), desviacion de HRV contra tu linea base personal, preparacion propia
+// de Garmin, sueno de anoche, y un override de seguridad si Training Status indica
+// sobrecarga. Es un sistema de reglas ponderado, NO aprendizaje automatico -- con el
+// historial que hay hoy (pocas sesiones) un modelo entrenado seria puro sobreajuste.
+function calcularACWR(){
+  const contarCarga = (dias)=>{
+    const desde = new Date(); desde.setDate(desde.getDate()-dias);
+    let total = 0;
+    HIST_ENTRENAMIENTOS.forEach(e=>{
+      if (new Date(e.fecha) >= desde) total += (e.datos.ejercicios||[]).length;
+    });
+    return total;
+  };
+  const aguda = contarCarga(7);
+  const cronica = contarCarga(28) / 4;
+  if (cronica === 0) return aguda>0 ? 1.5 : 1; // sin suficiente historial cronico -- neutral, algo cauto si ya hay carga aguda
+  return aguda / cronica;
+}
+
+function calcularScoreIntensidad(){
+  const w = DATOS.wellness;
+  const hoy = w[w.length-1];
+  if (!hoy) return 50;
+  const w7 = w.slice(-7), w30 = w.slice(-30);
+  let score = 50;
+
+  // 1. Preparacion propia de Garmin (ya es un compuesto: sueno+hrv+estres+carga)
+  if (hoy.training_readiness!=null) score += (hoy.training_readiness - 50) * 0.5;
+
+  // 2. HRV de hoy vs tu linea base personal de 30 dias (no el valor absoluto, el desvio)
+  const rHrv = rango(w30.map(x=>x.hrv_ms));
+  if (rHrv && hoy.hrv_ms!=null){
+    if (hoy.hrv_ms < rHrv.min) score -= 15;
+    else if (hoy.hrv_ms > rHrv.max) score += 8;
+  }
+
+  // 3. Sueno de anoche
+  if (hoy.sleep_score!=null) score += (hoy.sleep_score - 60) * 0.25;
+
+  // 4. ACWR real -- el corazon del sistema: >1.3 es carga reciente alta frente a tu
+  // costumbre (penaliza fuerte), <0.8 significa que llevas semanas suaves (hay margen)
+  const acwr = calcularACWR();
+  if (acwr > 1.5) score -= 30;
+  else if (acwr > 1.3) score -= 18;
+  else if (acwr < 0.8) score += 10;
+
+  // 5. Override de seguridad: si Garmin dice que estas sobrecargado, no lo ignora nada mas
+  const ts = DATOS.performance && DATOS.performance.training_status;
+  const statusData = ts && ts.mostRecentTrainingStatus && ts.mostRecentTrainingStatus.latestTrainingStatusData;
+  const estado = statusData && Object.values(statusData)[0] && Object.values(statusData)[0].trainingStatusFeedbackPhrase;
+  if (estado && /OVERREACHING|STRAINED/i.test(estado)) score = Math.min(score, 30);
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+// ── Algoritmo 2: que musculo recomendar al añadir un ejercicio.
+// Cruza dos señales reales con pesos distintos: la carga de ESTA semana (peso alto,
+// es el objetivo inmediato de equilibrio) y tu historial completo (peso menor, corrige
+// desequilibrios de mas largo plazo que una sola semana no revela).
+function recomendarMusculo(){
+  const { nivel } = cargaMuscularSemana(0); // 0-10 de la semana actual, ya construido
+  const historico = calcularCargaDesdeHistorial();
+  const maxHist = Math.max(1, ...Object.values(historico));
+  const musculos = Object.keys(CANDIDATOS_ESTANDAR);
+  const combinado = {};
+  musculos.forEach(m=>{
+    const semanal = nivel[m] || 0;               // 0-10
+    const historicoNorm = ((historico[m]||0)/maxHist) * 10; // normalizado a 0-10 tambien
+    combinado[m] = semanal*0.7 + historicoNorm*0.3;
+  });
+  return musculos.reduce((a,b)=> combinado[b] < combinado[a] ? b : a);
+}
+
+// ── Algoritmo 3: el mejor ejercicio dentro del musculo elegido -- no al azar.
+// Puntua cada candidato por: (a) cuanto ayuda a OTROS musculos flojos via su efecto
+// secundario, (b) si es compuesto (mas gasto calorico, coincide con tu objetivo de
+// bajar grasa), (c) variedad -- penaliza lo repetido en las ultimas 4 semanas, (d) tipo
+// de equipo segun tu preparacion de hoy (mismo criterio que la intensidad).
+function elegirMejorEjercicio(musculo, yaEnElDia){
+  const candidatosIds = (CANDIDATOS_ESTANDAR[musculo]||[]).filter(id=>{
+    const ex = FE_COMPLETO[id];
+    return ex && !yaEnElDia.has(ex.nombre);
+  });
+  if (!candidatosIds.length) return null;
+
+  const { nivel } = cargaMuscularSemana(0);
+  const peoresServidos = Object.keys(nivel).sort((a,b)=>(nivel[a]||0)-(nivel[b]||0)).slice(0,4);
+  const scoreIntensidadHoy = calcularScoreIntensidad();
+  const equipoPreferido = scoreIntensidadHoy>=65 ? ["barbell","dumbbell"] : scoreIntensidadHoy<35 ? ["machine","body only"] : null;
+
+  const usoReciente = {};
+  const hace28 = new Date(); hace28.setDate(hace28.getDate()-28);
+  HIST_ENTRENAMIENTOS.forEach(e=>{
+    if (new Date(e.fecha) < hace28) return;
+    (e.datos.ejercicios||[]).forEach(ej=>{ usoReciente[ej.ejercicio] = (usoReciente[ej.ejercicio]||0)+1; });
+  });
+
+  let mejor = null, mejorPuntaje = -Infinity;
+  candidatosIds.forEach(id=>{
+    const ex = FE_COMPLETO[id];
+    let p = 0;
+    ex.secundarios.forEach(alias=>{
+      resolverMusculo(alias, ex.nombre).forEach(m=>{ if (peoresServidos.includes(m)) p += 10; });
+    });
+    if (ex.mecanica === "compound") p += 5;
+    p -= 3 * (usoReciente[ex.nombre] || 0);
+    if (equipoPreferido && equipoPreferido.includes(ex.equipo)) p += 6;
+    if (p > mejorPuntaje){ mejorPuntaje = p; mejor = id; }
+  });
+  return mejor;
+}
+
 function recomendarIntensidad(){
-  const hoy = DATOS.wellness[DATOS.wellness.length-1];
-  const r = hoy && hoy.training_readiness;
-  if (r==null) return "firme";
-  if (r>=70) return "bestia";
-  if (r>=40) return "firme";
+  const score = calcularScoreIntensidad();
+  if (score >= 65) return "bestia";
+  if (score >= 35) return "firme";
   return "suave";
 }
 
@@ -1383,11 +1495,20 @@ function pintarPrograma(){
     <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Entrenamiento — ${dia.enfoque}</p>
     ${ejercicios}
     <p class="sub" style="margin-top:8px">Toca 🔄 para cambiar un ejercicio por otro que trabaje el mismo músculo.</p>
-    <div style="display:flex;gap:6px;margin-top:10px">
-      <select id="agregar-musculo-select" class="disp" style="flex:1">
-        ${Object.keys(CANDIDATOS_ESTANDAR).map(m=>`<option value="${m}">${MUSCULOS_NOMBRE[m]||m}</option>`).join("")}
-      </select>
-      <button id="agregar-ejercicio-btn" class="btn disp">+ Añadir</button>
+    <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Añadir ejercicio — toca un músculo</p>
+    <div id="chips-musculo" style="display:flex;flex-wrap:wrap;gap:6px">
+      ${(()=>{
+        const recomendado = recomendarMusculo();
+        return Object.keys(CANDIDATOS_ESTANDAR).map(m=>{
+          const esRecomendado = m===recomendado;
+          const estilo = esRecomendado
+            ? `border:2px solid #39FF14;box-shadow:0 0 8px #39FF14;color:#39FF14`
+            : `border:1px solid ${css('--borde')};color:${css('--tinta')}`;
+          return `<button class="chip-musculo disp" data-musculo="${m}" style="${estilo};padding:8px 12px;border-radius:20px;font-size:12px;background:${css('--tarjeta')}">
+            ${MUSCULOS_NOMBRE[m]||m}${esRecomendado?" ★":""}
+          </button>`;
+        }).join("");
+      })()}
     </div>
     <button id="programa-completado" class="boton disp" style="margin-top:12px;width:100%" ${todosMarcados?"":"disabled"}>
       ${todosMarcados ? "✓ Marcar entrenamiento completado" : `Marca los ${dia.ejercicios.length} ejercicios para completar`}
