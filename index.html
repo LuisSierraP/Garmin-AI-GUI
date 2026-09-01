@@ -204,6 +204,15 @@ canvas{max-width:100%}
         </div>
       </section>
 
+      <section class="tarjeta">
+        <div class="cab" style="align-items:center">
+          <h2 class="disp">Programa de entrenamiento</h2>
+          <span class="sub" id="programa-ciclo"></span>
+        </div>
+        <div id="programa-dias-tabs" style="display:flex;gap:6px;margin:10px 0"></div>
+        <div id="programa-contenido"></div>
+      </section>
+
       <section class="tarjeta"><h2 class="disp">Resumen</h2><div class="grid3" id="gym-resumen"></div></section>
       <section class="tarjeta">
         <div class="cab" style="align-items:center">
@@ -362,6 +371,7 @@ const DEFS = {
 };
 
 const $ = (id) => document.getElementById(id);
+const USUARIO_ACTUAL = "luis"; // coincide con el perfil de config.json -- un usuario nuevo = una carpeta nueva, sin tocar esta constante en tiempo de ejecucion cuando haya login real
 // Unico punto que construye peticiones a la API de GitHub -- URL y cabeceras
 // de autenticacion en un solo sitio. Anadir un endpoint nuevo no repite nada.
 function fetchRepo(pathAfterRepo, { pat, raw = true, method = "GET", jsonBody = null } = {}){
@@ -445,6 +455,8 @@ async function cargar(pat){
   OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
   BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
   PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
+  await cargarProgramaGym(pat);
+  await cargarIndiceMusculoEjercicio(pat);
   await cargarEjerciciosGarmin(pat);
   renderTabs();
   pintar();
@@ -1042,6 +1054,23 @@ $("sugerencia-dia-btn").addEventListener("click", async ()=>{
 $("sueno-dia-prev").addEventListener("click", ()=>{ suenoDiaOffset--; pintarSueno(1); });
 $("sueno-dia-next").addEventListener("click", ()=>{ if (suenoDiaOffset<0){ suenoDiaOffset++; pintarSueno(1); } });
 $("semana-prev").addEventListener("click", ()=>{ semanaOffset--; pintarGym(); });
+
+document.addEventListener("click", (e)=>{
+  const tabDia = e.target.closest(".dia-programa");
+  if (tabDia){ diaProgramaActivo = +tabDia.dataset.dia; pintarPrograma(); return; }
+
+  const btnCambiar = e.target.closest(".cambiar-ejercicio");
+  if (btnCambiar){
+    const idx = +btnCambiar.dataset.idx;
+    const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
+    const ej = dia.ejercicios[idx];
+    const musculo = ej.musculo_principal;
+    const candidatos = (INDICE_MUSCULO_EJERCICIO[musculo]||[]).map(x=>x.ejercicio).filter(n=>n!==ej.ejercicio);
+    if (!candidatos.length){ alert("No encontré otra alternativa real para este músculo."); return; }
+    ej.ejercicio = candidatos[Math.floor(Math.random()*candidatos.length)];
+    pintarPrograma();
+  }
+});
 $("semana-next").addEventListener("click", ()=>{ if (semanaOffset<0){ semanaOffset++; pintarGym(); } });
 
 $("bt-toggle").addEventListener("click", ()=>{
@@ -1067,9 +1096,8 @@ $("plan-guardar").addEventListener("click", async ()=>{
   const ok = await guardarConDatos("plan-gym", datos, $("plan-estado"));
   if (ok){
     const pat = localStorage.getItem(KEY);
-    vigilarArchivo("app/historial-plan-gym.json", async ()=>{
+    vigilarArchivo("app/usuarios/luis/historial-plan-gym.json", async ()=>{
       PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
-  await cargarEjerciciosGarmin(pat);
       pintarPlanGym();
     }, "Guardando plan… (unos segundos)", "Sigue en marcha — recarga en un momento");
   }
@@ -1125,7 +1153,7 @@ $("bt-guardar").addEventListener("click", async ()=>{
   const ok = await guardarConDatos("bodytype", datos, $("bt-estado"));
   if (ok){
     const pat = localStorage.getItem(KEY);
-    vigilarArchivo("app/historial-bodytype.json", async ()=>{
+    vigilarArchivo("app/usuarios/luis/historial-bodytype.json", async ()=>{
       BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
       $("bt-historial").innerHTML = tablaHistorialHTML(BODYTYPE_HIST||[], [["endo","Endo"],["meso","Meso"],["ecto","Ecto"]]);
     }, "Guardando medición… (unos segundos)", "Sigue en marcha — recarga en un momento");
@@ -1135,6 +1163,58 @@ $("bt-guardar").addEventListener("click", async ()=>{
 // ── plan de entrenamiento (Gym): mismo historial generico que Objetivos/Body Type ──
 let PLAN_GYM_HIST = null, planDiasSel = new Set();
 const DIAS_SEMANA = ["L","M","X","J","V","S","D"];
+// ── Programa de entrenamiento: carga desde historial-programa-gym, pinta por dia ──
+let PROGRAMA_GYM = null, diaProgramaActivo = 1;
+
+let INDICE_MUSCULO_EJERCICIO = null;
+async function cargarIndiceMusculoEjercicio(pat){
+  try{
+    const r = await fetchRepo('contents/app/gym-db/indice-musculo-ejercicio.json', { pat });
+    INDICE_MUSCULO_EJERCICIO = r.ok ? (await r.json()).musculo_a_ejercicios : {};
+  }catch(e){ INDICE_MUSCULO_EJERCICIO = {}; }
+}
+async function cargarProgramaGym(pat){
+  const hist = await cargarHistorial("programa-gym", pat);
+  PROGRAMA_GYM = hist.length ? hist[hist.length-1].datos : null;
+}
+
+function pintarPrograma(){
+  if (!PROGRAMA_GYM){
+    $("programa-ciclo").textContent = "";
+    $("programa-dias-tabs").innerHTML = "";
+    $("programa-contenido").innerHTML = '<p class="sub">Sin programa guardado todavía.</p>';
+    return;
+  }
+  $("programa-ciclo").textContent = `ciclo de ${PROGRAMA_GYM.semanas_por_ciclo} semanas`;
+  $("programa-dias-tabs").innerHTML = PROGRAMA_GYM.dias.map(d=>
+    `<button class="btn disp dia-programa ${d.dia===diaProgramaActivo?'act':''}" data-dia="${d.dia}">Día ${d.dia}</button>`).join("");
+
+  const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
+  if (!dia){ $("programa-contenido").innerHTML = ""; return; }
+
+  const calent = (dia.calentamiento||[]).map(c=>{
+    if (c.tipo==="cardio") return `<div class="fila">🏃 ${c.actividad} — ${c.duracion}<br><span class="sub">${c.nota}</span></div>`;
+    return `<div class="fila">🤸 ${c.ejercicio} — ${c.series}×${c.reps}</div>`;
+  }).join("");
+
+  const ejercicios = dia.ejercicios.map((ej,i)=>{
+    return `<div class="fila" data-idx="${i}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span><b>${ej.ejercicio}</b><br><span class="sub">${ej.patron} — ${ej.series}×${ej.reps}</span></span>
+        <button class="btn disp cambiar-ejercicio" data-idx="${i}" title="Cambiar por otro ejercicio">🔄</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  $("programa-contenido").innerHTML = `
+    <p class="disp sub" style="font-size:11px;margin:8px 0 4px">Calentamiento</p>
+    ${calent}
+    <p class="disp sub" style="font-size:11px;margin:14px 0 4px">Entrenamiento — ${dia.enfoque}</p>
+    ${ejercicios}
+    <p class="sub" style="margin-top:8px">Toca 🔄 para cambiar un ejercicio por otro que trabaje el mismo músculo.</p>
+  `;
+}
+
 function pintarPlanGym(){
   $("plan-dias").innerHTML = DIAS_SEMANA.map((d,i)=>
     `<button class="btn disp plan-dia ${planDiasSel.has(i)?"act":""}" data-dia="${i}">${d}</button>`).join("");
@@ -1224,6 +1304,7 @@ function diagramaCargaSemanal(nivel){
 }
 
 function pintarGym(){
+  pintarPrograma();
   const { nivel, nSesiones, lunes, domingo } = cargaMuscularSemana(semanaOffset);
   $("semana-rango").textContent = semanaOffset===0 ? "últimos 7 días" : fRangoSemana(lunes, domingo);
   $("semana-next").disabled = semanaOffset>=0;
@@ -1446,7 +1527,7 @@ function autoSync(){
 // datos reutiliza estas tres funciones -- nunca hace falta un mecanismo nuevo.
 async function cargarHistorial(categoria, pat){
   try{
-    const r = await fetchRepo(`contents/app/historial-${categoria}.json`, { pat });
+    const r = await fetchRepo(`contents/app/usuarios/${USUARIO_ACTUAL}/historial-${categoria}.json`, { pat });
     if (!r.ok) return [];
     const h = await r.json();
     return Array.isArray(h) ? h : [];
@@ -1455,7 +1536,7 @@ async function cargarHistorial(categoria, pat){
 async function guardarConDatos(categoria, datos, statusEl){
   const pat = localStorage.getItem(KEY);
   if (statusEl) statusEl.textContent = "Enviando a tu repositorio…";
-  const r = await dispararWorkflow("guardar-historial.yml", { categoria, datos_json: JSON.stringify(datos) }, pat);
+  const r = await dispararWorkflow("guardar-historial.yml", { categoria, datos_json: JSON.stringify(datos), usuario: USUARIO_ACTUAL }, pat);
   if (!r){ if (statusEl) statusEl.textContent = "Sin conexión para guardar en el repositorio."; return false; }
   if (r.status===204){
     if (statusEl) statusEl.textContent = "Guardando en tu repositorio…";
@@ -1491,7 +1572,7 @@ async function guardarObjetivosRemoto(){
   const ok = await guardarConDatos("objetivos", { peso, medidas }, $("obj-estado"));
   if (ok){
     const pat = localStorage.getItem(KEY);
-    vigilarArchivo("app/historial-objetivos.json", async ()=>{
+    vigilarArchivo("app/usuarios/luis/historial-objetivos.json", async ()=>{
       OBJETIVOS_REPO = await cargarHistorial("objetivos", pat);
   BODYTYPE_HIST = await cargarHistorial("bodytype", pat);
       pintarSalud();
