@@ -462,6 +462,7 @@ async function cargar(pat){
   PLAN_GYM_HIST = await cargarHistorial("plan-gym", pat);
   await cargarProgramaGym(pat);
   await cargarIndiceMusculoEjercicio(pat);
+  await cargarDatosGeneracion(pat);
   await cargarEjerciciosGarmin(pat);
   renderTabs();
   pintar();
@@ -1079,6 +1080,16 @@ document.addEventListener("click", (e)=>{
     return;
   }
 
+  const btnExtra = e.target.closest("#programa-dia-extra");
+  if (btnExtra){
+    const nuevoDia = generarDiaExtra();
+    PROGRAMA_GYM.dias.push(nuevoDia);
+    diaProgramaActivo = nuevoDia.dia;
+    guardarConDatos("programa-gym", PROGRAMA_GYM, null);
+    pintarPrograma();
+    return;
+  }
+
   const btnCompletado = e.target.closest("#programa-completado");
   if (btnCompletado && !btnCompletado.disabled){
     const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
@@ -1224,6 +1235,93 @@ async function cargarProgramaGym(pat){
   PROGRAMA_GYM = hist.length ? hist[hist.length-1].datos : null;
 }
 
+// ── Día extra: se genera con datos reales, mirando lo ya completado ──
+let FE_COMPLETO = {}, FE_A_MIO = {}, CANDIDATOS_ESTANDAR = {}, HIST_ENTRENAMIENTOS = [];
+
+async function cargarDatosGeneracion(pat){
+  try{
+    const r1 = await fetchRepo('contents/app/gym-db/ejercicios-freeexercisedb.json', { pat });
+    if (r1.ok){
+      const fe = await r1.json();
+      const CODIGO_INV = {}; Object.entries(fe._codigo_musculos).forEach(([n,c])=>{ CODIGO_INV[c]=n; });
+      fe.ejercicios.forEach(([id,nombre,pc,sc])=>{
+        FE_COMPLETO[id] = { nombre, primarios: pc.map(c=>CODIGO_INV[c]), secundarios: sc.map(c=>CODIGO_INV[c]) };
+      });
+    }
+    const r2 = await fetchRepo('contents/app/gym-db/musculos.json', { pat });
+    if (r2.ok){
+      const musc = await r2.json();
+      musc.musculos_en_uso.forEach(m=>{ (m.freeexercisedb||[]).forEach(alias=>{
+        (FE_A_MIO[alias] = FE_A_MIO[alias]||[]).push(m.id);
+      }); });
+    }
+    const r3 = await fetchRepo('contents/app/gym-db/candidatos-estandar.json', { pat });
+    if (r3.ok) CANDIDATOS_ESTANDAR = (await r3.json()).candidatos_por_musculo;
+    HIST_ENTRENAMIENTOS = await cargarHistorial("entrenamientos", pat);
+  }catch(e){ /* generacion de dia extra quedara deshabilitada si algo falla */ }
+}
+
+function idPorNombre(nombre){
+  return Object.keys(FE_COMPLETO).find(id => FE_COMPLETO[id].nombre === nombre);
+}
+function resolverMusculo(alias, nombreEjercicio){
+  const candidatos = FE_A_MIO[alias] || [];
+  if (candidatos.length <= 1) return candidatos;
+  const n = (nombreEjercicio||"").toUpperCase();
+  if (/LATERAL/.test(n) && candidatos.includes("hombro_lateral")) return ["hombro_lateral"];
+  if (/REAR|POSTERIOR|REVERSE/.test(n) && candidatos.includes("hombro_posterior")) return ["hombro_posterior"];
+  return candidatos.includes("hombro_frontal") ? ["hombro_frontal"] : candidatos.slice(0,1);
+}
+function puntajeEjercicio(id, acumulador){
+  const ex = FE_COMPLETO[id];
+  if (!ex) return;
+  const prim = new Set(); ex.primarios.forEach(a=>resolverMusculo(a, ex.nombre).forEach(m=>prim.add(m)));
+  const sec = new Set(); ex.secundarios.forEach(a=>resolverMusculo(a, ex.nombre).forEach(m=>{ if(!prim.has(m)) sec.add(m); }));
+  prim.forEach(m=>{ acumulador[m] = (acumulador[m]||0) + 1.0; });
+  sec.forEach(m=>{ acumulador[m] = (acumulador[m]||0) + 0.5; });
+}
+
+function calcularCargaDesdeHistorial(){
+  const p = {};
+  Object.keys(MUSCULOS_NOMBRE).forEach(m=>p[m]=0);
+  HIST_ENTRENAMIENTOS.forEach(entrada=>{
+    (entrada.datos.ejercicios||[]).forEach(ej=>{
+      const id = idPorNombre(ej.ejercicio);
+      if (id) puntajeEjercicio(id, p);
+    });
+  });
+  return p;
+}
+
+function generarDiaExtra(){
+  const puntaje = calcularCargaDesdeHistorial();
+  const musculosObjetivo = Object.keys(CANDIDATOS_ESTANDAR);
+  const usadosHoy = new Set();
+  const ejercicios = [];
+  for (let i=0; i<7; i++){
+    const peor = musculosObjetivo.reduce((a,b)=> (puntaje[b]||0) < (puntaje[a]||0) ? b : a);
+    const pool = (CANDIDATOS_ESTANDAR[peor]||[]).filter(id=>!usadosHoy.has(id));
+    const id = (pool.length ? pool : (CANDIDATOS_ESTANDAR[peor]||[]))[0];
+    if (!id) continue;
+    usadosHoy.add(id);
+    puntajeEjercicio(id, puntaje);
+    const ex = FE_COMPLETO[id];
+    ejercicios.push({ patron: peor, musculo_principal: peor, ejercicio: ex.nombre, series: 3, reps: "12-15" });
+  }
+  return {
+    dia: PROGRAMA_GYM.dias.length + 1,
+    enfoque: "Full body (día extra)",
+    calentamiento: PROGRAMA_GYM.dias[0].calentamiento,
+    ejercicios,
+  };
+}
+
+function todosLosDiasCompletadosRecientemente(){
+  if (!PROGRAMA_GYM) return false;
+  const n = PROGRAMA_GYM.dias.length;
+  const ultimos = HIST_ENTRENAMIENTOS.slice(-n).map(e=>e.datos.dia);
+  return PROGRAMA_GYM.dias.every(d => ultimos.includes(d.dia));
+}
 let CHECKS_PROGRAMA = {}; // {diaNumero: Set de indices marcados}
 function pintarPrograma(){
   if (!PROGRAMA_GYM){
@@ -1271,6 +1369,13 @@ function pintarPrograma(){
     <p id="programa-completado-estado" class="sub" style="margin-top:6px"></p>
   `;
   if (!todosMarcados) $("programa-completado").style.opacity = .5;
+
+  const extraBtn = document.getElementById("programa-dia-extra");
+  if (extraBtn) extraBtn.remove();
+  if (todosLosDiasCompletadosRecientemente()){
+    $("programa-contenido").insertAdjacentHTML("beforeend",
+      `<button id="programa-dia-extra" class="boton disp" style="margin-top:14px;width:100%;background:${css('--alba')}">+ Generar día extra</button>`);
+  }
 }
 
 function pintarPlanGym(){
