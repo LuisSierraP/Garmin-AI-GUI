@@ -1182,17 +1182,24 @@ function cargaMuscularSemana(offset){
     const f = new Date((a.start_local||"1970").replace(" ","T"));
     return f>=inicioBloque && f<finExclusivo;
   });
-  const cargaP = {}, cargaS = {};
+  // Puntaje combinado por musculo: el trabajo como primario cuenta el doble que como
+  // secundario (convencion estandar de ciencia del ejercicio: el musculo protagonista
+  // recibe mas estimulo que el que solo asiste). Un solo numero por musculo, no dos.
+  const puntaje = {};
   sesiones.forEach(a=>{
     (a.exercise_sets||[]).forEach(e=>{
       const md = buscarMusculos(e.categoria, e.subcategoria);
       if (!md) return;
       const peso = e.series || 1;
-      md.p.forEach(m=>{ cargaP[m] = (cargaP[m]||0) + peso; });
-      md.s.forEach(m=>{ if (!md.p.includes(m)) cargaS[m] = (cargaS[m]||0) + peso; });
+      md.p.forEach(m=>{ puntaje[m] = (puntaje[m]||0) + peso*1.0; });
+      md.s.forEach(m=>{ if (!md.p.includes(m)) puntaje[m] = (puntaje[m]||0) + peso*0.5; });
     });
   });
-  return { cargaP, cargaS, nSesiones: sesiones.length, lunes: inicioBloque, domingo: finExclusivo };
+  // Escalar a 0-10 relativo al musculo mas trabajado esa semana (10 = el que mas carga tuvo).
+  const maxPuntaje = Math.max(1, ...Object.values(puntaje), 0);
+  const nivel = {};
+  Object.entries(puntaje).forEach(([m,v])=>{ nivel[m] = Math.round((v/maxPuntaje)*10*10)/10; });
+  return { nivel, nSesiones: sesiones.length, lunes: inicioBloque, domingo: finExclusivo };
 }
 function fRangoSemana(lunes, domingo){
   const fin = new Date(domingo); fin.setDate(fin.getDate()-1);
@@ -1207,41 +1214,42 @@ function interpolarColor(c1, c2, t){
   const r = h1.map((v,i)=>Math.round(v+(h2[i]-v)*t));
   return "#"+r.map(v=>v.toString(16).padStart(2,"0")).join("");
 }
-function diagramaCargaSemanal(cargaP, cargaS){
-  const maxP = Math.max(1, ...Object.values(cargaP), 0);
-  const maxS = Math.max(1, ...Object.values(cargaS), 0);
+// Rampa de color continua sobre 0-10, varios colores reales (no solo 2): gris (sin trabajar)
+// -> amarillo palido -> amarillo -> naranja -> rojo -> rojo oscuro (maximo esfuerzo).
+const RAMPA_NIVEL = ["#5b6472","#FFF3B0","#FFD93D","#FF8C42","#E63946","#7F1D1D"];
+function colorPorNivel(n){
+  if (n<=0) return RAMPA_NIVEL[0];
+  const t = Math.min(1, n/10) * (RAMPA_NIVEL.length-2); // posicion entre los tramos 1..5
+  const i = Math.floor(t), frac = t-i;
+  return interpolarColor(RAMPA_NIVEL[1+i], RAMPA_NIVEL[1+Math.min(i+1,RAMPA_NIVEL.length-2)], frac);
+}
+function diagramaCargaSemanal(nivel){
   const CATS = [...new Set(MUSCLE_PATHS.map(r=>r.c).filter(Boolean))];
-  function coloresDe(cat){
-    const p = cargaP[cat]||0, s = cargaS[cat]||0;
-    if (p===0 && s===0) return { centro: css('--contorno'), borde: css('--contorno') };
-    if (p>0){
-      const t = p/maxP;
-      return { centro:"#FFD54D", borde: interpolarColor("#FC4C02","#7f1d1d", t) };
-    }
-    const t = s/maxS;
-    return { centro: interpolarColor("#FFF3B0","#FFC24D", t*0.6), borde: interpolarColor("#FFC24D","#E67300", t) };
-  }
-  const defsHTML = CATS.map(cat=>{
-    const {centro, borde} = coloresDe(cat);
-    return `<radialGradient id="grad-${cat}" cx="50%" cy="50%" r="65%"><stop offset="0%" stop-color="${centro}"/><stop offset="100%" stop-color="${borde}"/></radialGradient>`;
-  }).join("");
-  const col = (cat)=> cat ? `url(#grad-${cat})` : "#5b6472";
-  const dibujar = (vista)=> `<defs>${defsHTML}</defs>` + MUSCLE_PATHS.filter(r=>r.v===vista).map(r=>
+  const col = (cat)=> cat ? colorPorNivel(nivel[cat]||0) : "#5b6472";
+  const dibujar = (vista)=> MUSCLE_PATHS.filter(r=>r.v===vista).map(r=>
     `<path d="${r.p}" fill="${col(r.c)}" stroke="${css('--fondo')}" stroke-width="0.15"/>`).join("");
+  const barraLeyenda = `<div style="height:10px;border-radius:5px;margin:8px auto 2px;max-width:220px;background:linear-gradient(90deg,${RAMPA_NIVEL.join(",")})"></div>
+    <div style="display:flex;justify-content:space-between;max-width:220px;margin:0 auto;font-size:9px;color:${css('--suave')}"><span>0</span><span>5</span><span>10</span></div>`;
+  const filas = CATS.map(c=>[c, nivel[c]||0]).filter(([,n])=>n>0).sort((a,b)=>b[1]-a[1]);
+  const lista = filas.length ? `<div style="margin-top:10px;font-size:12px">${filas.map(([c,n])=>
+    `<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid ${css('--borde')}">
+      <span>${MUSCULOS_NOMBRE[c]||c}</span><b style="color:${colorPorNivel(n)}">${n.toFixed(1)}</b></div>`).join("")}</div>` : "";
   return `<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <div style="text-align:center"><svg viewBox="0 0 35 93" style="width:100%;max-width:150px">${dibujar("FRONT")}</svg><div class="disp sub" style="font-size:9px">FRONTAL</div></div>
     <div style="text-align:center"><svg viewBox="37 0 35 93" style="width:100%;max-width:150px">${dibujar("BACK")}</svg><div class="disp sub" style="font-size:9px">POSTERIOR</div></div>
   </div>
-  <p class="sub" style="text-align:center;margin-top:6px;line-height:1.4">Amarillo → rojo: trabajado como <b>primario</b> (más rojo = más carga esta semana).<br>Amarillo pálido → naranja: solo <b>secundario</b>.</p>`;
+  ${barraLeyenda}
+  <p class="sub" style="text-align:center;margin-top:6px">Nivel 0-10: 10 = el músculo más trabajado esta semana. Cuanto más parejos los números, más homogéneo el entrenamiento.</p>
+  ${lista}`;
 }
 
 function pintarGym(){
-  const { cargaP, cargaS, nSesiones, lunes, domingo } = cargaMuscularSemana(semanaOffset);
+  const { nivel, nSesiones, lunes, domingo } = cargaMuscularSemana(semanaOffset);
   $("semana-rango").textContent = semanaOffset===0 ? "últimos 7 días" : fRangoSemana(lunes, domingo);
   $("semana-next").disabled = semanaOffset>=0;
   $("semana-next").style.opacity = semanaOffset>=0 ? .4 : 1;
   $("gym-mapa-semana").innerHTML = nSesiones
-    ? diagramaCargaSemanal(cargaP, cargaS)
+    ? diagramaCargaSemanal(nivel)
     : `<p class="sub">Sin sesiones de fuerza ${semanaOffset===0?"esta semana":"en esa semana"} todavía.</p>`;
   const sesiones = (DATOS.activities||[]).filter(a=>esGym(a.type));
   const fuerza = sesiones.filter(a=>(a.type||"").includes("strength"));
