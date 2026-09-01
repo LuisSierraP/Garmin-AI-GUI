@@ -747,7 +747,7 @@ const GARMIN_A_MIO = {
 let EJERCICIOS_GARMIN = null; // lookup plano: "CATEGORIA::SUBCATEGORIA" -> {p:[...], s:[...]}
 async function cargarEjerciciosGarmin(pat){
   try{
-    const r = await fetchRepo('contents/app/ejercicios-garmin-completo.json', { pat });
+    const r = await fetchRepo('contents/app/gym-db/ejercicios-garmin.json', { pat });
     if (!r.ok){ EJERCICIOS_GARMIN = {}; return; }
     const datos = await r.json();
     const CODIGO_INV = {}; Object.entries(datos._codigo_musculos).forEach(([nombre,cod])=>{ CODIGO_INV[cod]=nombre; });
