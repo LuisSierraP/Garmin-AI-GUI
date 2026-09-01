@@ -1359,6 +1359,28 @@ function calcularScoreIntensidad(){
 // Cruza dos señales reales con pesos distintos: la carga de ESTA semana (peso alto,
 // es el objetivo inmediato de equilibrio) y tu historial completo (peso menor, corrige
 // desequilibrios de mas largo plazo que una sola semana no revela).
+// ── Aviso de "hay datos suficientes para un algoritmo mas avanzado" ──
+// Umbral justificado: los estudios de modelado Bayesiano individual de Fitness-Fatiga
+// que investigue usaban 28-42 dias de datos POR PERSONA como minimo razonable para
+// ajustar parametros sin sobreajuste. 30 sesiones reales es un umbral conservador
+// equivalente. Esto NO envia ningun mensaje por si solo -- Claude no puede escribirte
+// sin que abras una conversacion. Esto solo lo muestra AQUI, en la app, para que tu
+// decidas cuando traerlo a un chat.
+const UMBRAL_SESIONES_ALGORITMO_AVANZADO = 30;
+function pintarAvisoAlgoritmoAvanzado(){
+  const cont = $("programa-contenido").parentElement;
+  const existente = document.getElementById("aviso-algoritmo-avanzado");
+  if (existente) existente.remove();
+  if (HIST_ENTRENAMIENTOS.length >= UMBRAL_SESIONES_ALGORITMO_AVANZADO){
+    cont.insertAdjacentHTML("afterbegin",
+      `<div id="aviso-algoritmo-avanzado" class="nota-tecnica"><span class="ic">📈</span><span>
+        Ya tienes ${HIST_ENTRENAMIENTOS.length} sesiones registradas — suficientes para considerar un algoritmo
+        Bayesiano o de aprendizaje por refuerzo en vez de las reglas actuales.
+        Pídele a Claude que lo evalúe.
+      </span></div>`);
+  }
+}
+
 function recomendarMusculo(){
   const { nivel } = cargaMuscularSemana(0); // 0-10 de la semana actual, ya construido
   const historico = calcularCargaDesdeHistorial();
@@ -1465,6 +1487,7 @@ function pintarPrograma(){
   $("programa-ciclo").textContent = `ciclo de ${PROGRAMA_GYM.semanas_por_ciclo} semanas`;
   $("programa-dias-tabs").innerHTML = PROGRAMA_GYM.dias.map(d=>
     `<button class="btn disp dia-programa ${d.dia===diaProgramaActivo?'act':''}" data-dia="${d.dia}">Día ${d.dia}</button>`).join("");
+  pintarAvisoAlgoritmoAvanzado();
 
   const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
   if (!dia){ $("programa-contenido").innerHTML = ""; return; }
