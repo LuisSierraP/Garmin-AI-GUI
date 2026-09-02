@@ -1498,8 +1498,26 @@ function pintarPrograma(){
     return `<div class="fila">🤸 ${c.ejercicio} — ${c.series}×${c.reps}</div>`;
   }).join("");
 
-  const ejercicios = dia.ejercicios.map((ej,i)=>{
-    return `<div class="fila" data-idx="${i}">
+  // Ordenar por tipo de equipo: maquina/cable/peso corporal primero, pesas libres despues
+  // (edificios distintos en tu gimnasio) -- se reordena solo en cada render, asi que
+  // cambiar o anadir un ejercicio con distinto equipo reacomoda automaticamente.
+  const grupoEquipo = (nombreEj)=>{
+    const id = idPorNombre(nombreEj);
+    const equipo = id && FE_COMPLETO[id] && FE_COMPLETO[id].equipo;
+    return (equipo==="barbell" || equipo==="dumbbell") ? 1 : 0;
+  };
+  const conIndice = dia.ejercicios.map((ej,i)=>({ ej, i }));
+  conIndice.sort((a,b)=> grupoEquipo(a.ej.ejercicio) - grupoEquipo(b.ej.ejercicio));
+
+  let grupoAnterior = null;
+  const ejercicios = conIndice.map(({ej,i})=>{
+    const grupo = grupoEquipo(ej.ejercicio);
+    let separador = "";
+    if (grupo !== grupoAnterior){
+      separador = `<p class="disp sub" style="font-size:10px;margin:10px 0 2px;color:${css('--alba')}">${grupo===0?"🛠️ Máquina / cable":"🏋️ Pesas libres"}</p>`;
+      grupoAnterior = grupo;
+    }
+    return separador + `<div class="fila" data-idx="${i}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <label style="display:flex;align-items:center;gap:8px;flex:1">
           <input type="checkbox" class="chk-ejercicio" data-idx="${i}" ${checksDia.has(i)?"checked":""}>
