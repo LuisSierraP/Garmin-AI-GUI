@@ -1060,6 +1060,7 @@ document.addEventListener("click", (e)=>{
       .filter(n=>n && n!==ej.ejercicio);
     if (!candidatos.length){ alert("No encontré otra alternativa real para este músculo."); return; }
     ej.ejercicio = candidatos[Math.floor(Math.random()*candidatos.length)];
+    guardarConDatos("programa-gym", PROGRAMA_GYM, null);
     pintarPrograma();
     return;
   }
@@ -1095,13 +1096,17 @@ document.addEventListener("click", (e)=>{
   const btnCompletado = e.target.closest("#programa-completado");
   if (btnCompletado && !btnCompletado.disabled){
     const dia = PROGRAMA_GYM.dias.find(d=>d.dia===diaProgramaActivo);
+    const checksDia = CHECKS_PROGRAMA[diaProgramaActivo] || new Set();
+    const hechos = dia.ejercicios.filter((_,i)=>checksDia.has(i));
     const datos = {
       dia: dia.dia, enfoque: dia.enfoque,
-      ejercicios: dia.ejercicios.map(e=>({ejercicio:e.ejercicio, series:e.series, reps:e.reps, musculo:e.musculo_principal})),
+      ejercicios: hechos.map(e=>({ejercicio:e.ejercicio, series:e.series, reps:e.reps, musculo:e.musculo_principal})),
+      completo: hechos.length===dia.ejercicios.length,
     };
     guardarConDatos("entrenamientos", datos, $("programa-completado-estado")).then(ok=>{
       if (ok){
         CHECKS_PROGRAMA[diaProgramaActivo] = new Set();
+        guardarChecksProgramaLocal();
         $("programa-completado-estado").textContent = "¡Entrenamiento guardado! ✓";
         pintarPrograma();
       }
@@ -1116,6 +1121,7 @@ document.addEventListener("change", (e)=>{
   const idx = +chk.dataset.idx;
   const set = CHECKS_PROGRAMA[diaProgramaActivo] || (CHECKS_PROGRAMA[diaProgramaActivo] = new Set());
   chk.checked ? set.add(idx) : set.delete(idx);
+  guardarChecksProgramaLocal();
   pintarPrograma();
 });
 
@@ -1476,7 +1482,20 @@ function todosLosDiasCompletadosRecientemente(){
   const ultimos = HIST_ENTRENAMIENTOS.slice(-n).map(e=>e.datos.dia);
   return PROGRAMA_GYM.dias.every(d => ultimos.includes(d.dia));
 }
-let CHECKS_PROGRAMA = {}; // {diaNumero: Set de indices marcados}
+let CHECKS_PROGRAMA = {}; // {diaNumero: Set de indices marcados} -- persistido en localStorage
+function cargarChecksProgramaLocal(){
+  try{
+    const raw = JSON.parse(localStorage.getItem("checks_programa_gym") || "{}");
+    CHECKS_PROGRAMA = {};
+    Object.entries(raw).forEach(([dia, arr])=>{ CHECKS_PROGRAMA[dia] = new Set(arr); });
+  }catch(e){ CHECKS_PROGRAMA = {}; }
+}
+function guardarChecksProgramaLocal(){
+  const plano = {};
+  Object.entries(CHECKS_PROGRAMA).forEach(([dia, set])=>{ plano[dia] = [...set]; });
+  localStorage.setItem("checks_programa_gym", JSON.stringify(plano));
+}
+cargarChecksProgramaLocal();
 function pintarPrograma(){
   if (!PROGRAMA_GYM){
     $("programa-ciclo").textContent = "";
@@ -1530,6 +1549,9 @@ function pintarPrograma(){
 
   const todosMarcados = dia.ejercicios.length>0 && dia.ejercicios.every((_,i)=>checksDia.has(i));
 
+  const marcados = dia.ejercicios.filter((_,i)=>checksDia.has(i)).length;
+  const todosMarcados = dia.ejercicios.length>0 && marcados===dia.ejercicios.length;
+
   $("programa-contenido").innerHTML = `
     <p class="disp sub" style="font-size:11px;margin:8px 0 4px">Calentamiento</p>
     ${calent}
@@ -1551,8 +1573,8 @@ function pintarPrograma(){
         }).join("");
       })()}
     </div>
-    <button id="programa-completado" class="boton disp" style="margin-top:12px;width:100%" ${todosMarcados?"":"disabled"}>
-      ${todosMarcados ? "✓ Marcar entrenamiento completado" : `Marca los ${dia.ejercicios.length} ejercicios para completar`}
+    <button id="programa-completado" class="boton disp" style="margin-top:12px;width:100%" ${marcados>0?"":"disabled"}>
+      ${todosMarcados ? "✓ Marcar entrenamiento completado" : marcados>0 ? `Terminar día (${marcados}/${dia.ejercicios.length} hechos)` : "Marca al menos un ejercicio"}
     </button>
     <p id="programa-completado-estado" class="sub" style="margin-top:6px"></p>
   `;
