@@ -1976,7 +1976,7 @@ function emojiEjercicio(categoria, subcategoria){
 }
 
 function seccionFuerza(id, meta){
-  const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, subcategoria:e.subcategoria, ejercicio:e.ejercicio, series:e.series, reps:e.reps, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
+  const deGarmin = (meta.exercise_sets||[]).map(e=>({categoria:e.categoria, subcategoria:e.subcategoria, ejercicio:e.ejercicio, series:e.series, reps:e.reps, duracion_ms:e.duracion_ms, peso: e.peso_g?Math.round(e.peso_g/100)/10:null, origen:"Garmin"}));
   const manuales = ejerciciosGuardados(id).map(e=>({...e, origen:"manual"}));
   const todos = [...deGarmin, ...manuales];
   const primarios = new Set(), secundarios = new Set();
@@ -1993,7 +1993,13 @@ function seccionFuerza(id, meta){
     html += `<div style="font-size:13px">` + todos.map(e=>{
       const nombreSub = e.subcategoria ? e.subcategoria.replaceAll("_"," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase()) : null;
       const nombre = e.ejercicio || nombreSub || CATEGORIA_NOMBRE[e.categoria] || e.categoria || "Ejercicio";
-      const partes = [e.series?`${e.series} serie${e.series>1?"s":""}`:null, e.reps?`${e.reps} reps`:null, e.peso?`${e.peso} kg`:null].filter(Boolean).join(" · ");
+      const fDuracion = (ms)=>{ const seg = Math.round(ms/1000); return seg>=60 ? `${Math.floor(seg/60)} min${seg%60?" "+(seg%60)+" seg":""}` : `${seg} seg`; };
+      const partes = [
+        e.series?`${e.series} serie${e.series>1?"s":""}`:null,
+        e.reps?`${e.reps} reps`:null,
+        e.duracion_ms?`${fDuracion(e.duracion_ms)} total`:null,
+        e.peso?`${e.peso} kg`:null,
+      ].filter(Boolean).join(" · ");
       const emo = emojiEjercicio(e.categoria, e.subcategoria);
       return `<div class="fila">${emo} ${nombre}${partes?" — "+partes:""} <span class="sub">(${e.origen})</span></div>`;
     }).join("") + `</div>`;
