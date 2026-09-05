@@ -1684,15 +1684,16 @@ function diagramaCargaSemanal(nivel){
 }
 
 let timelineGymRango = "semana";
-function diasConGym(n){
+function diasConGym(n, offsetSemanas){
   const set = new Set();
   (DATOS.activities||[]).forEach(a=>{
     if ((a.type||"").includes("strength")) set.add((a.start_local||"").slice(0,10));
   });
   const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const terminaEn = new Date(hoy); terminaEn.setDate(terminaEn.getDate() + (offsetSemanas||0)*7);
   const dias = [];
   for (let i=n-1; i>=0; i--){
-    const f = new Date(hoy); f.setDate(f.getDate()-i);
+    const f = new Date(terminaEn); f.setDate(f.getDate()-i);
     const iso = f.toISOString().slice(0,10);
     dias.push({ fecha: f, hizo: set.has(iso) });
   }
@@ -1700,7 +1701,10 @@ function diasConGym(n){
 }
 function pintarTimelineGym(){
   const n = timelineGymRango==="semana" ? 7 : 28;
-  const dias = diasConGym(n);
+  // La vista Semana usa el mismo semanaOffset que la Carga muscular -- si navegas ahi a
+  // una semana anterior, esta linea de tiempo se mueve igual, para que siempre correspondan.
+  const offset = timelineGymRango==="semana" ? semanaOffset : 0;
+  const dias = diasConGym(n, offset);
   const tamCuadro = timelineGymRango==="semana" ? 34 : 18;
   const cuadros = dias.map(d=>{
     const color = d.hizo ? css('--alba') : css('--contorno');
@@ -1713,7 +1717,7 @@ function pintarTimelineGym(){
   const total = dias.filter(d=>d.hizo).length;
   $("timeline-gym").innerHTML = `
     <div style="display:flex;gap:${timelineGymRango==='semana'?'8px':'4px'};flex-wrap:wrap;justify-content:${timelineGymRango==='semana'?'space-between':'flex-start'}">${cuadros}</div>
-    <p class="sub" style="margin-top:8px">${total} de ${n} días con gym</p>
+    <p class="sub" style="margin-top:8px">${total} de ${n} días con gym${timelineGymRango==="semana"&&offset!==0?" (misma semana que Carga muscular)":""}</p>
   `;
 }
 
