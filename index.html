@@ -206,6 +206,16 @@ canvas{max-width:100%}
       <section class="tarjeta"><h2 class="disp">Resumen</h2><div class="grid3" id="gym-resumen"></div></section>
       <section class="tarjeta">
         <div class="cab" style="align-items:center">
+          <h2 class="disp">Días de gym</h2>
+          <div style="display:flex;gap:6px">
+            <button class="btn disp timeline-rango act" data-rango="semana">Semana</button>
+            <button class="btn disp timeline-rango" data-rango="mes">Mes</button>
+          </div>
+        </div>
+        <div id="timeline-gym" style="margin-top:10px"></div>
+      </section>
+      <section class="tarjeta">
+        <div class="cab" style="align-items:center">
           <h2 class="disp">Carga muscular</h2>
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn disp" id="semana-prev">‹</button>
@@ -1080,6 +1090,15 @@ document.addEventListener("click", (e)=>{
   }
   if (e.target.id==="popup-intensidad-fondo"){ $("popup-intensidad-fondo").remove(); return; }
 
+  const btnRango = e.target.closest(".timeline-rango");
+  if (btnRango){
+    document.querySelectorAll(".timeline-rango").forEach(b=>b.classList.remove("act"));
+    btnRango.classList.add("act");
+    timelineGymRango = btnRango.dataset.rango;
+    pintarTimelineGym();
+    return;
+  }
+
   const chipMusculo = e.target.closest(".chip-musculo");
   if (chipMusculo){
     const musculo = chipMusculo.dataset.musculo;
@@ -1664,7 +1683,42 @@ function diagramaCargaSemanal(nivel){
   ${lista}`;
 }
 
+let timelineGymRango = "semana";
+function diasConGym(n){
+  const set = new Set();
+  (DATOS.activities||[]).forEach(a=>{
+    if ((a.type||"").includes("strength")) set.add((a.start_local||"").slice(0,10));
+  });
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const dias = [];
+  for (let i=n-1; i>=0; i--){
+    const f = new Date(hoy); f.setDate(f.getDate()-i);
+    const iso = f.toISOString().slice(0,10);
+    dias.push({ fecha: f, hizo: set.has(iso) });
+  }
+  return dias;
+}
+function pintarTimelineGym(){
+  const n = timelineGymRango==="semana" ? 7 : 28;
+  const dias = diasConGym(n);
+  const tamCuadro = timelineGymRango==="semana" ? 34 : 18;
+  const cuadros = dias.map(d=>{
+    const color = d.hizo ? css('--alba') : css('--contorno');
+    const letra = timelineGymRango==="semana" ? DIAS_SEMANA[(d.fecha.getDay()+6)%7] : "";
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="width:${tamCuadro}px;height:${tamCuadro}px;border-radius:6px;background:${color}"></div>
+      ${letra?`<span class="sub" style="font-size:9px">${letra}</span>`:""}
+    </div>`;
+  }).join("");
+  const total = dias.filter(d=>d.hizo).length;
+  $("timeline-gym").innerHTML = `
+    <div style="display:flex;gap:${timelineGymRango==='semana'?'8px':'4px'};flex-wrap:wrap;justify-content:${timelineGymRango==='semana'?'space-between':'flex-start'}">${cuadros}</div>
+    <p class="sub" style="margin-top:8px">${total} de ${n} días con gym</p>
+  `;
+}
+
 function pintarGym(){
+  pintarTimelineGym();
   pintarPrograma();
   const { nivel, nSesiones, lunes, domingo } = cargaMuscularSemana(semanaOffset);
   $("semana-rango").textContent = semanaOffset===0 ? "últimos 7 días" : fRangoSemana(lunes, domingo);
@@ -2026,7 +2080,12 @@ function seccionFuerza(id, meta){
 
 function construirHTMLDetalle(d, meta){
   let html = "";
-  if (meta) html += `<p class="sub" style="margin:10px 0 0">${(meta.start_local||"").slice(0,10)} · ${[km(meta.distance_m),dur(meta.duration_s),meta.avg_hr?`FC media ${Math.round(meta.avg_hr)}`:null,meta.max_hr?`FC máx ${Math.round(meta.max_hr)}`:null,meta.elev_gain_m?`+${Math.round(meta.elev_gain_m)} m`:null,meta.calories?`${Math.round(meta.calories)} kcal`:null].filter(Boolean).join(" · ")}</p>`;
+  if (meta){
+    // La fila de arriba (siempre visible) ya muestra fecha, distancia, duracion y FC media --
+    // aqui solo lo que NO esta repetido, para que cada dato aparezca una sola vez.
+    const extra = [meta.max_hr?`FC máx ${Math.round(meta.max_hr)}`:null, meta.elev_gain_m?`+${Math.round(meta.elev_gain_m)} m`:null, meta.calories?`${Math.round(meta.calories)} kcal`:null].filter(Boolean).join(" · ");
+    if (extra) html += `<p class="sub" style="margin:10px 0 0">${extra}</p>`;
+  }
 
   if ((meta.type||"").includes("strength")) html += seccionFuerza(meta.id, meta);
 
