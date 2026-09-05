@@ -428,11 +428,13 @@ function renderTabs(){
   const pid = perfilActivo();
   const perfil = (CONFIG.perfiles||{})[pid] || {tabs:TODAS_TABS};
   const visibles = (perfil.tabs||[]).filter(t=>TODAS_TABS.includes(t));
+  const guardada = sessionStorage.getItem("tab_activa");
+  const inicial = (guardada && visibles.includes(guardada)) ? guardada : visibles[0];
   $("tabbar").innerHTML = visibles.map((t,i)=>{
     const meta = (CONFIG.tabs||{})[t] || {icono:"",nombre:t};
-    return `<button class="tabbtn ${i===0?"act":""}" data-tab="${t}">${meta.icono} ${meta.nombre}</button>`;
+    return `<button class="tabbtn ${t===inicial?"act":""}" data-tab="${t}">${meta.icono} ${meta.nombre}</button>`;
   }).join("");
-  TODAS_TABS.forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==visibles[0]));
+  TODAS_TABS.forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==inicial));
   const rol = perfil.rol ? ` · ${perfil.rol}` : "";
   $("pie").dataset.perfil = `perfil: ${perfil.nombre||pid}${rol}`;
 }
@@ -2227,6 +2229,7 @@ document.addEventListener("click",(e)=>{
   if (e.target.classList.contains("tabbtn")){
     document.querySelectorAll(".tabbtn").forEach(b=>b.classList.remove("act")); e.target.classList.add("act");
     TODAS_TABS.forEach(t=>$("tab-"+t).classList.toggle("oculto", t!==e.target.dataset.tab));
+    sessionStorage.setItem("tab_activa", e.target.dataset.tab);
   }
   const fila = e.target.closest(".fila[data-actid]");
   if (fila){
