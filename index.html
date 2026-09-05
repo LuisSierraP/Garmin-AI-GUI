@@ -1547,8 +1547,6 @@ function pintarPrograma(){
     </div>`;
   }).join("");
 
-  const todosMarcados = dia.ejercicios.length>0 && dia.ejercicios.every((_,i)=>checksDia.has(i));
-
   const marcados = dia.ejercicios.filter((_,i)=>checksDia.has(i)).length;
   const todosMarcados = dia.ejercicios.length>0 && marcados===dia.ejercicios.length;
 
